@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "axios": "^0.21.1",
+    "axios": "^0.21.4",
     "cors": "^2.8.5",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
@@ -21,8 +21,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "nodemon server.js",
     "client": "react-scripts start",
-    "heroku-postbuild": "npm run build",
-    "preinstall": "npm cache clean --force"
+    "heroku-postbuild": "npm run build"
   },
   "eslintConfig": {
     "extends": [
@@ -44,11 +43,9 @@
   },
   "devDependencies": {
     "concurrently": "^6.2.0",
-    "cross-env": "^7.0.3",
     "nodemon": "^2.0.7"
   },
   "engines": {
     "node": "14.x"
-  },
-  "//": "Added this comment to force a rebuild on Heroku"
+  }
 }
