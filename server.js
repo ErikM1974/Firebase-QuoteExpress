@@ -16,11 +16,52 @@ app.use(express.static(path.join(__dirname, 'build')));
 app.get('/api/products', async (req, res) => {
   try {
     // Mock data - replace this with actual API call when ready
-    const mockProducts = [
-      { id: 1, name: 'T-Shirt', basePrice: 10 },
-      { id: 2, name: 'Hoodie', basePrice: 25 },
-      { id: 3, name: 'Cap', basePrice: 15 },
-    ];
+    const mockProducts = {
+      Result: [
+        {
+          UNIQUE_KEY: '1',
+          PRODUCT_TITLE: 'T-Shirt',
+          STYLE_No: 'TS001',
+          COLOR_NAME: 'Black',
+          SIZE: 'M',
+          Price_2_5: '10',
+          Price_6_11: '9',
+          Price_12_23: '8',
+          Price_24_47: '7',
+          Price_48_71: '6',
+          Price_72_plus: '5',
+          Surcharge: '0'
+        },
+        {
+          UNIQUE_KEY: '2',
+          PRODUCT_TITLE: 'Hoodie',
+          STYLE_No: 'HD001',
+          COLOR_NAME: 'Navy',
+          SIZE: 'L',
+          Price_2_5: '25',
+          Price_6_11: '24',
+          Price_12_23: '23',
+          Price_24_47: '22',
+          Price_48_71: '21',
+          Price_72_plus: '20',
+          Surcharge: '2'
+        },
+        {
+          UNIQUE_KEY: '3',
+          PRODUCT_TITLE: 'Cap',
+          STYLE_No: 'CP001',
+          COLOR_NAME: 'Red',
+          SIZE: 'One Size',
+          Price_2_5: '15',
+          Price_6_11: '14',
+          Price_12_23: '13',
+          Price_24_47: '12',
+          Price_48_71: '11',
+          Price_72_plus: '10',
+          Surcharge: '0'
+        }
+      ]
+    };
     res.json(mockProducts);
   } catch (error) {
     console.error('Error fetching products:', error.message);

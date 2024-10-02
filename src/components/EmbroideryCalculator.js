@@ -34,27 +34,42 @@ export default function EmbroideryCalculator() {
       try {
         setLoading(true);
         const response = await axios.get('/api/products');
+        
+        if (!response.data || !response.data.Result || !Array.isArray(response.data.Result)) {
+          throw new Error('Invalid data structure received from the server');
+        }
+
         const formattedData = {};
-        response.data.Result.forEach(product => {
-          const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
-          if (!formattedData[key]) {
-            formattedData[key] = {
-              UNIQUE_KEY: product.UNIQUE_KEY,
-              PRODUCT_TITLE: product.PRODUCT_TITLE,
-              STYLE_No: product.STYLE_No,
-              COLOR_NAME: product.COLOR_NAME,
-              sizes: {},
-              ...product
-            };
-          }
-          formattedData[key].sizes[product.SIZE] = product;
-        });
+        try {
+          response.data.Result.forEach(product => {
+            if (!product.STYLE_No || !product.COLOR_NAME) {
+              console.warn('Product missing STYLE_No or COLOR_NAME:', product);
+              return; // Skip this product
+            }
+            const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
+            if (!formattedData[key]) {
+              formattedData[key] = {
+                UNIQUE_KEY: product.UNIQUE_KEY,
+                PRODUCT_TITLE: product.PRODUCT_TITLE,
+                STYLE_No: product.STYLE_No,
+                COLOR_NAME: product.COLOR_NAME,
+                sizes: {},
+                ...product
+              };
+            }
+            formattedData[key].sizes[product.SIZE] = product;
+          });
+        } catch (formatError) {
+          console.error('Error formatting product data:', formatError);
+          throw new Error('Error processing product data');
+        }
+
         setProductDatabase(formattedData);
         setLoading(false);
         console.log('Product database:', formattedData);
       } catch (error) {
-        console.error('Error fetching product data:', error);
-        setError('Failed to load product data. Please try again later.');
+        console.error('Error fetching or processing product data:', error);
+        setError(`Failed to load product data: ${error.message}. Please try again later.`);
         setLoading(false);
       }
     };
