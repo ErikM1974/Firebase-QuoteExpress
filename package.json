@@ -24,7 +24,8 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "nodemon server.js",
     "client": "react-scripts start",
-    "heroku-postbuild": "npm run build"
+    "heroku-postbuild": "npm run build",
+    "preinstall": "npm cache clean --force"
   },
   "eslintConfig": {
     "extends": [
@@ -51,5 +52,6 @@
   },
   "engines": {
     "node": "14.x"
-  }
+  },
+  "//": "Added this comment to force a rebuild on Heroku"
 }
