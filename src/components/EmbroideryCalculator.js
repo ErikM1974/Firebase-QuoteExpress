@@ -34,6 +34,9 @@ export default function EmbroideryCalculator() {
       setLoading(true);
       try {
         const response = await axios.get('/api/products');
+        if (!response.data || !Array.isArray(response.data.Result)) {
+          throw new Error('Invalid data structure received from the server');
+        }
         const products = response.data.Result;
 
         const formattedData = {};
@@ -54,6 +57,7 @@ export default function EmbroideryCalculator() {
         });
 
         setProductDatabase(formattedData);
+        setError(null);
       } catch (err) {
         console.error('Error fetching product data:', err);
         setError(`Failed to load product data: ${err.message}. Please try again later.`);
@@ -65,7 +69,6 @@ export default function EmbroideryCalculator() {
     fetchProducts();
   }, []);
 
-  // Rest of the component remains unchanged
   const addNewLine = () => {
     setOrders([...orders, {
       style: "",
