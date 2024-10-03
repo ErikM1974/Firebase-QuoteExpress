@@ -30,6 +30,10 @@ async function refreshToken() {
     console.log('Token refreshed successfully');
   } catch (error) {
     console.error('Error refreshing token:', error.message);
+    if (error.response) {
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+    }
     throw error;
   }
 }
@@ -45,6 +49,8 @@ async function getValidToken() {
 app.get('/api/products', async (req, res) => {
   try {
     const token = await getValidToken();
+    console.log('API URL:', process.env.REACT_APP_CASPIO_API_URL);
+    console.log('Token:', token.substring(0, 10) + '...');
     const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`, {
       headers: {
         'Authorization': `bearer ${token}`,
@@ -54,6 +60,10 @@ app.get('/api/products', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching products:', error.message);
+    if (error.response) {
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+    }
     res.status(500).json({ error: 'Error fetching products', details: error.message });
   }
 });
@@ -66,4 +76,12 @@ app.get('*', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
+  console.log('Environment variables:');
+  console.log('REACT_APP_CASPIO_API_URL:', process.env.REACT_APP_CASPIO_API_URL);
+  console.log('REACT_APP_CASPIO_TOKEN_URL:', process.env.REACT_APP_CASPIO_TOKEN_URL);
+  console.log('REACT_APP_CASPIO_CLIENT_ID:', process.env.REACT_APP_CASPIO_CLIENT_ID ? 'Set' : 'Not set');
+  console.log('REACT_APP_CASPIO_CLIENT_SECRET:', process.env.REACT_APP_CASPIO_CLIENT_SECRET ? 'Set' : 'Not set');
+  console.log('ACCESS_TOKEN:', process.env.ACCESS_TOKEN ? 'Set' : 'Not set');
+  console.log('REFRESH_TOKEN:', process.env.REFRESH_TOKEN ? 'Set' : 'Not set');
+  console.log('TOKEN_EXPIRY:', process.env.TOKEN_EXPIRY);
 });
