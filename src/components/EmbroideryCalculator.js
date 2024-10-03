@@ -18,53 +18,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const fetchAccessToken = async () => {
-  const tokenUrl = process.env.REACT_APP_CASPIO_TOKEN_URL; // Ensure this is available in .env or Heroku Config
-  const clientId = process.env.REACT_APP_CASPIO_CLIENT_ID;
-  const clientSecret = process.env.REACT_APP_CASPIO_CLIENT_SECRET;
-
-  try {
-    const response = await axios.post(tokenUrl, null, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      auth: {
-        username: clientId,
-        password: clientSecret,
-      },
-      params: {
-        grant_type: 'client_credentials',
-      },
-    });
-
-    return response.data.access_token;
-  } catch (error) {
-    console.error('Error fetching access token:', error);
-    throw new Error('Failed to get access token from Caspio');
-  }
-};
-
-const fetchProductsFromAPI = async (accessToken) => {
-  const apiUrl = process.env.REACT_APP_CASPIO_API_URL;
-
-  try {
-    const response = await axios.get(`${apiUrl}/tables/Products/rows`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.data || !Array.isArray(response.data.Result)) {
-      throw new Error('Invalid product data structure');
-    }
-
-    return response.data.Result;
-  } catch (error) {
-    console.error('Error fetching product data:', error);
-    throw new Error('Failed to fetch product data from Caspio');
-  }
-};
-
 export default function EmbroideryCalculator() {
   const [productDatabase, setProductDatabase] = useState({});
   const [orders, setOrders] = useState([{
@@ -75,9 +28,106 @@ export default function EmbroideryCalculator() {
   }]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [config, setConfig] = useState(null);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await axios.get('/api/config');
+        setConfig(response.data);
+      } catch (err) {
+        console.error('Error fetching configuration:', err);
+        setError('Failed to load configuration. Please try again later.');
+      }
+    };
+
+    fetchConfig();
+  }, []);
+
+  const fetchAccessToken = async () => {
+    if (!config) {
+      throw new Error('Configuration not loaded');
+    }
+
+    const { REACT_APP_CASPIO_TOKEN_URL, REACT_APP_CASPIO_CLIENT_ID, REACT_APP_CASPIO_CLIENT_SECRET } = config;
+
+    if (!REACT_APP_CASPIO_TOKEN_URL) {
+      throw new Error('REACT_APP_CASPIO_TOKEN_URL is not defined in the server configuration');
+    }
+    if (!REACT_APP_CASPIO_CLIENT_ID) {
+      throw new Error('REACT_APP_CASPIO_CLIENT_ID is not defined in the server configuration');
+    }
+    if (!REACT_APP_CASPIO_CLIENT_SECRET) {
+      throw new Error('REACT_APP_CASPIO_CLIENT_SECRET is not defined in the server configuration');
+    }
+
+    try {
+      const response = await axios.post(REACT_APP_CASPIO_TOKEN_URL, null, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        auth: {
+          username: REACT_APP_CASPIO_CLIENT_ID,
+          password: REACT_APP_CASPIO_CLIENT_SECRET,
+        },
+        params: {
+          grant_type: 'client_credentials',
+        },
+      });
+
+      if (!response.data || !response.data.access_token) {
+        throw new Error('Invalid response from Caspio token endpoint');
+      }
+
+      return response.data.access_token;
+    } catch (error) {
+      console.error('Error fetching access token:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      }
+      throw new Error(`Failed to get access token from Caspio: ${error.message}`);
+    }
+  };
+
+  const fetchProductsFromAPI = async (accessToken) => {
+    if (!config) {
+      throw new Error('Configuration not loaded');
+    }
+
+    const { REACT_APP_CASPIO_API_URL } = config;
+
+    if (!REACT_APP_CASPIO_API_URL) {
+      throw new Error('REACT_APP_CASPIO_API_URL is not defined in the server configuration');
+    }
+
+    try {
+      const response = await axios.get(`${REACT_APP_CASPIO_API_URL}/tables/Products/rows`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.data || !Array.isArray(response.data.Result)) {
+        throw new Error('Invalid product data structure');
+      }
+
+      return response.data.Result;
+    } catch (error) {
+      console.error('Error fetching product data:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      }
+      throw new Error(`Failed to fetch product data from Caspio: ${error.message}`);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!config) return; // Wait for config to be loaded
       setLoading(true);
       try {
         const accessToken = await fetchAccessToken();
@@ -103,14 +153,14 @@ export default function EmbroideryCalculator() {
         setProductDatabase(formattedData);
       } catch (err) {
         console.error('Error fetching or processing product data:', err);
-        setError(`Failed to load product data: ${err.message}. Please try again later.`);
+        setError(`Failed to load product data: ${err.message}. Please check your server configuration and try again.`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [config]);
 
   // Rest of the component remains unchanged
   const addNewLine = () => {

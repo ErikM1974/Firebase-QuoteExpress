@@ -1,10 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5000; // Use Heroku's port or default to 5000
 
 app.use(cors());
 app.use(express.json());
@@ -67,6 +68,16 @@ app.get('/api/products', async (req, res) => {
     console.error('Error fetching products:', error.message);
     res.status(500).json({ error: 'Error fetching products' });
   }
+});
+
+// New endpoint to serve environment variables
+app.get('/api/config', (req, res) => {
+  res.json({
+    REACT_APP_CASPIO_TOKEN_URL: process.env.REACT_APP_CASPIO_TOKEN_URL,
+    REACT_APP_CASPIO_API_URL: process.env.REACT_APP_CASPIO_API_URL,
+    REACT_APP_CASPIO_CLIENT_ID: process.env.REACT_APP_CASPIO_CLIENT_ID,
+    REACT_APP_CASPIO_CLIENT_SECRET: process.env.REACT_APP_CASPIO_CLIENT_SECRET,
+  });
 });
 
 // The "catchall" handler: for any request that doesn't
