@@ -83,7 +83,96 @@ export default function EmbroideryCalculator() {
     fetchProducts();
   }, []);
 
-  // ... (rest of the component code remains unchanged)
+  const addNewLine = () => {
+    setOrders([...orders, {
+      STYLE_No: "",
+      COLOR_NAME: "",
+      quantities: {},
+      error: null
+    }]);
+  };
+
+  const removeLine = (index) => {
+    if (orders.length > 1) {
+      const newOrders = orders.filter((_, i) => i !== index);
+      setOrders(newOrders);
+    }
+  };
+
+  const updateOrder = (index, field, value) => {
+    const newOrders = [...orders];
+    newOrders[index] = {
+      ...newOrders[index],
+      [field]: value,
+      error: null
+    };
+
+    if (field === 'STYLE_No') {
+      newOrders[index].COLOR_NAME = '';
+      newOrders[index].quantities = {};
+    } else if (field === 'COLOR_NAME') {
+      newOrders[index].quantities = {};
+    }
+
+    const key = `${newOrders[index].STYLE_No}-${newOrders[index].COLOR_NAME}`;
+    if (newOrders[index].STYLE_No && newOrders[index].COLOR_NAME && !productDatabase[key]) {
+      newOrders[index].error = "Invalid style or color combination";
+    }
+
+    setOrders(newOrders);
+  };
+
+  const updateQuantity = (orderIndex, size, value) => {
+    const newOrders = [...orders];
+    const newQuantities = {
+      ...newOrders[orderIndex].quantities,
+      [size]: parseInt(value) || 0
+    };
+    newOrders[orderIndex].quantities = newQuantities;
+    setOrders(newOrders);
+  };
+
+  const calculateOrderTotals = () => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return acc + Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
+    }, 0);
+
+    return orders.reduce((acc, order) => {
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+      const product = productDatabase[key];
+      if (!product) return acc;
+
+      const orderQuantity = Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
+      const basePrice = getPriceForQuantity(product, totalQuantity);
+
+      const orderPrice = Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+        if (!qty) return sum;
+        const sizeProduct = product.sizes[size];
+        const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+        return sum + (basePrice + surcharge) * qty;
+      }, 0);
+
+      return {
+        quantity: acc.quantity + orderQuantity,
+        price: acc.price + orderPrice
+      };
+    }, { quantity: 0, price: 0 });
+  };
+
+  const handleSubmitOrder = () => {
+    console.log('Submitting order:', orders);
+    alert('Order submitted successfully!');
+  };
+
+  const totals = calculateOrderTotals();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return <div className="text-red-500">{error}</div>;
+  }
 
   return (
     <div className="w-full p-4 bg-gray-100">
@@ -154,7 +243,27 @@ export default function EmbroideryCalculator() {
           ))}
         </tbody>
       </table>
-      {/* ... (rest of the component remains unchanged) */}
+      {orders.some(order => order.error) && (
+        <div className="text-red-500 mb-4">
+          {orders.map((order, index) => order.error && (
+            <div key={index}>Line {index + 1}: {order.error}</div>
+          ))}
+        </div>
+      )}
+      <div className="mb-4">
+        <button onClick={addNewLine} className="bg-green-600 text-white px-4 py-2 rounded mr-2 hover:bg-green-700">
+          Add Line
+        </button>
+        <button onClick={handleSubmitOrder} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          Submit Order
+        </button>
+      </div>
+      <div className="text-xl font-bold text-gray-700">
+        Total Quantity: {totals.quantity}
+      </div>
+      <div className="text-xl font-bold text-gray-700">
+        Total Price: ${totals.price.toFixed(2)}
+      </div>
     </div>
   );
 }
