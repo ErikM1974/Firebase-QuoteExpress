@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
+const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 const LARGE_SIZES = ['2XL', '3XL', '4XL'];
 
 const getPriceForQuantity = (product, totalQuantity) => {
@@ -179,6 +179,18 @@ export default function EmbroideryCalculator() {
     alert('Order submitted successfully!');
   };
 
+  const getAvailableSizes = (order) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return DEFAULT_SIZES;
+
+    const availableSizes = Object.keys(product.sizes);
+    if (availableSizes.includes('OSFA')) {
+      return ['OSFA'];
+    }
+    return availableSizes.sort((a, b) => DEFAULT_SIZES.indexOf(a) - DEFAULT_SIZES.indexOf(b));
+  };
+
   const totals = calculateOrderTotals();
 
   if (loading) {
@@ -199,79 +211,83 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Style No</th>
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
-            {SIZES.map(size => (
-              <th key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-700' : ''}`}>
-                {size}
-              </th>
-            ))}
+            <th className="border border-gray-300 p-2">Sizes</th>
             <th className="border border-gray-300 p-2">Row Total</th>
             <th className="border border-gray-300 p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {orders.map((order, index) => (
-            <tr key={index}>
-              <td className="border border-gray-300 p-2">
-                <input
-                  list={`styles-${index}`}
-                  value={order.STYLE_No}
-                  onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
-                  className="w-full"
-                  placeholder="Enter or select style"
-                />
-                <datalist id={`styles-${index}`}>
-                  {styles.map(style => (
-                    <option key={style} value={style} />
-                  ))}
-                </datalist>
-              </td>
-              <td className="border border-gray-300 p-2">
-                <select
-                  value={order.COLOR_NAME}
-                  onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
-                  className="w-full"
-                  disabled={!order.STYLE_No}
-                >
-                  <option value="">Select Color</option>
-                  {colors[order.STYLE_No]?.map(color => (
-                    <option key={color} value={color}>{color}</option>
-                  ))}
-                </select>
-              </td>
-              <td className="border border-gray-300 p-2">
-                {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
-              </td>
-              {SIZES.map(size => {
-                const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-                const product = productDatabase[key];
-                const basePrice = product ? getPriceForQuantity(product, totals.quantity) : 0;
-                const sizeProduct = product?.sizes[size];
-                const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
-                const price = basePrice + surcharge;
+          {orders.map((order, index) => {
+            const availableSizes = getAvailableSizes(order);
+            return (
+              <tr key={index}>
+                <td className="border border-gray-300 p-2">
+                  <input
+                    list={`styles-${index}`}
+                    value={order.STYLE_No}
+                    onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
+                    className="w-full"
+                    placeholder="Enter or select style"
+                  />
+                  <datalist id={`styles-${index}`}>
+                    {styles.map(style => (
+                      <option key={style} value={style} />
+                    ))}
+                  </datalist>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <select
+                    value={order.COLOR_NAME}
+                    onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
+                    className="w-full"
+                    disabled={!order.STYLE_No}
+                  >
+                    <option value="">Select Color</option>
+                    {colors[order.STYLE_No]?.map(color => (
+                      <option key={color} value={color}>{color}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <div className="flex flex-wrap">
+                    {availableSizes.map(size => {
+                      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+                      const product = productDatabase[key];
+                      const basePrice = product ? getPriceForQuantity(product, totals.quantity) : 0;
+                      const sizeProduct = product?.sizes[size];
+                      const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+                      const price = basePrice + surcharge;
 
-                return (
-                  <td key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-                    <input
-                      type="number"
-                      value={order.quantities[size] || ''}
-                      onChange={(e) => updateQuantity(index, size, e.target.value)}
-                      className="w-full mb-1"
-                      min="0"
-                    />
-                    <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
-                  </td>
-                );
-              })}
-              <td className="border border-gray-300 p-2 font-bold">
-                ${calculateRowTotal(order, totals.quantity).toFixed(2)}
-              </td>
-              <td className="border border-gray-300 p-2">
-                <button onClick={() => removeLine(index)} className="bg-red-500 text-white px-2 py-1 rounded">
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
+                      return (
+                        <div key={size} className={`w-1/4 p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+                          <div className="text-xs font-bold mb-1">{size}</div>
+                          <input
+                            type="number"
+                            value={order.quantities[size] || ''}
+                            onChange={(e) => updateQuantity(index, size, e.target.value)}
+                            className="w-full mb-1 text-sm"
+                            min="0"
+                          />
+                          <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </td>
+                <td className="border border-gray-300 p-2 font-bold">
+                  ${calculateRowTotal(order, totals.quantity).toFixed(2)}
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <button onClick={() => removeLine(index)} className="bg-red-500 text-white px-2 py-1 rounded">
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {orders.some(order => order.error) && (
