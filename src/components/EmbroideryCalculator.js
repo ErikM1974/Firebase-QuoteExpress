@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
+const LARGE_SIZES = ['2XL', '3XL', '4XL'];
 
 const getPriceForQuantity = (product, totalQuantity) => {
   if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
@@ -159,6 +160,20 @@ export default function EmbroideryCalculator() {
     }, { quantity: 0, price: 0 });
   };
 
+  const calculateRowTotal = (order, totalQuantity) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return 0;
+
+    const basePrice = getPriceForQuantity(product, totalQuantity);
+    return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+      if (!qty) return sum;
+      const sizeProduct = product.sizes[size];
+      const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+      return sum + (basePrice + surcharge) * qty;
+    }, 0);
+  };
+
   const handleSubmitOrder = () => {
     console.log('Submitting order:', orders);
     alert('Order submitted successfully!');
@@ -177,7 +192,6 @@ export default function EmbroideryCalculator() {
   return (
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Order Form</h1>
-      {/* Debug display */}
       <p className="mb-4">Number of styles available: {styles.length}</p>
       <table className="w-full border-collapse border border-gray-300 mb-4 bg-white">
         <thead>
@@ -186,8 +200,11 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
             {SIZES.map(size => (
-              <th key={size} className="border border-gray-300 p-2">{size}</th>
+              <th key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-700' : ''}`}>
+                {size}
+              </th>
             ))}
+            <th className="border border-gray-300 p-2">Row Total</th>
             <th className="border border-gray-300 p-2">Actions</th>
           </tr>
         </thead>
@@ -224,17 +241,30 @@ export default function EmbroideryCalculator() {
               <td className="border border-gray-300 p-2">
                 {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
               </td>
-              {SIZES.map(size => (
-                <td key={size} className="border border-gray-300 p-2">
-                  <input
-                    type="number"
-                    value={order.quantities[size] || ''}
-                    onChange={(e) => updateQuantity(index, size, e.target.value)}
-                    className="w-full"
-                    min="0"
-                  />
-                </td>
-              ))}
+              {SIZES.map(size => {
+                const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+                const product = productDatabase[key];
+                const basePrice = product ? getPriceForQuantity(product, totals.quantity) : 0;
+                const sizeProduct = product?.sizes[size];
+                const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+                const price = basePrice + surcharge;
+
+                return (
+                  <td key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+                    <input
+                      type="number"
+                      value={order.quantities[size] || ''}
+                      onChange={(e) => updateQuantity(index, size, e.target.value)}
+                      className="w-full mb-1"
+                      min="0"
+                    />
+                    <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
+                  </td>
+                );
+              })}
+              <td className="border border-gray-300 p-2 font-bold">
+                ${calculateRowTotal(order, totals.quantity).toFixed(2)}
+              </td>
               <td className="border border-gray-300 p-2">
                 <button onClick={() => removeLine(index)} className="bg-red-500 text-white px-2 py-1 rounded">
                   Remove
