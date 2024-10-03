@@ -33,10 +33,8 @@ const refreshAccessToken = async () => {
     tokenExpiryTime = Date.now() + response.data.expires_in * 1000;
 
     console.log('Access Token refreshed');
-    console.log('Token Expiry Time:', new Date(tokenExpiryTime));
-
   } catch (error) {
-    console.error('Error refreshing access token:', error);
+    console.error('Error refreshing access token:', error.message);
     throw new Error('Failed to refresh access token');
   }
 };
@@ -53,7 +51,6 @@ const fetchSanmarPricing = async () => {
     let hasMoreRecords = true;
 
     while (hasMoreRecords) {
-      console.log(`Fetching page ${pageNumber}...`);
       const response = await axios.get(`${CASPIO_API_URL}`, {
         params: {
           pageNumber: pageNumber,
@@ -65,23 +62,19 @@ const fetchSanmarPricing = async () => {
         }
       });
 
-      console.log(`Page ${pageNumber} response status:`, response.status);
-      console.log(`Page ${pageNumber} data:`, JSON.stringify(response.data, null, 2));
-
       if (response.data.Result && response.data.Result.length > 0) {
         allRecords = allRecords.concat(response.data.Result);
         pageNumber++;
+        console.log(`Fetched page ${pageNumber - 1}, total records: ${allRecords.length}`);
       } else {
         hasMoreRecords = false;
       }
-
-      console.log(`Total records fetched so far: ${allRecords.length}`);
     }
 
-    console.log(`Final total records fetched: ${allRecords.length}`);
+    console.log(`Total records fetched: ${allRecords.length}`);
     return allRecords;
   } catch (error) {
-    console.error('Error fetching product data:', error.response ? error.response.data : error.message);
+    console.error('Error fetching product data:', error.message);
     throw new Error('Failed to fetch product data');
   }
 };
@@ -115,5 +108,4 @@ app.listen(port, () => {
   console.log('CASPIO_CLIENT_SECRET:', CASPIO_CLIENT_SECRET ? 'Set' : 'Not set');
   console.log('ACCESS_TOKEN:', accessToken ? 'Set' : 'Not set');
   console.log('REFRESH_TOKEN:', refreshToken ? 'Set' : 'Not set');
-  console.log('Token Expiry Time:', new Date(tokenExpiryTime));
 });
