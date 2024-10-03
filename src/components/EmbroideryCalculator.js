@@ -28,110 +28,13 @@ export default function EmbroideryCalculator() {
   }]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [config, setConfig] = useState(null);
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await axios.get('/api/config');
-        setConfig(response.data);
-      } catch (err) {
-        console.error('Error fetching configuration:', err);
-        setError('Failed to load configuration. Please try again later.');
-      }
-    };
-
-    fetchConfig();
-  }, []);
-
-  const fetchAccessToken = async () => {
-    if (!config) {
-      throw new Error('Configuration not loaded');
-    }
-
-    const { REACT_APP_CASPIO_TOKEN_URL, REACT_APP_CASPIO_CLIENT_ID, REACT_APP_CASPIO_CLIENT_SECRET } = config;
-
-    if (!REACT_APP_CASPIO_TOKEN_URL) {
-      throw new Error('REACT_APP_CASPIO_TOKEN_URL is not defined in the server configuration');
-    }
-    if (!REACT_APP_CASPIO_CLIENT_ID) {
-      throw new Error('REACT_APP_CASPIO_CLIENT_ID is not defined in the server configuration');
-    }
-    if (!REACT_APP_CASPIO_CLIENT_SECRET) {
-      throw new Error('REACT_APP_CASPIO_CLIENT_SECRET is not defined in the server configuration');
-    }
-
-    try {
-      const response = await axios.post(REACT_APP_CASPIO_TOKEN_URL, null, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        auth: {
-          username: REACT_APP_CASPIO_CLIENT_ID,
-          password: REACT_APP_CASPIO_CLIENT_SECRET,
-        },
-        params: {
-          grant_type: 'client_credentials',
-        },
-      });
-
-      if (!response.data || !response.data.access_token) {
-        throw new Error('Invalid response from Caspio token endpoint');
-      }
-
-      return response.data.access_token;
-    } catch (error) {
-      console.error('Error fetching access token:', error);
-      if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-        console.error('Response headers:', error.response.headers);
-      }
-      throw new Error(`Failed to get access token from Caspio: ${error.message}`);
-    }
-  };
-
-  const fetchProductsFromAPI = async (accessToken) => {
-    if (!config) {
-      throw new Error('Configuration not loaded');
-    }
-
-    const { REACT_APP_CASPIO_API_URL } = config;
-
-    if (!REACT_APP_CASPIO_API_URL) {
-      throw new Error('REACT_APP_CASPIO_API_URL is not defined in the server configuration');
-    }
-
-    try {
-      const response = await axios.get(`${REACT_APP_CASPIO_API_URL}/tables/Products/rows`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.data || !Array.isArray(response.data.Result)) {
-        throw new Error('Invalid product data structure');
-      }
-
-      return response.data.Result;
-    } catch (error) {
-      console.error('Error fetching product data:', error);
-      if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-        console.error('Response headers:', error.response.headers);
-      }
-      throw new Error(`Failed to fetch product data from Caspio: ${error.message}`);
-    }
-  };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!config) return; // Wait for config to be loaded
+    const fetchProducts = async () => {
       setLoading(true);
       try {
-        const accessToken = await fetchAccessToken();
-        const products = await fetchProductsFromAPI(accessToken);
+        const response = await axios.get('/api/products');
+        const products = response.data.Result;
 
         const formattedData = {};
         products.forEach(product => {
@@ -152,15 +55,15 @@ export default function EmbroideryCalculator() {
 
         setProductDatabase(formattedData);
       } catch (err) {
-        console.error('Error fetching or processing product data:', err);
-        setError(`Failed to load product data: ${err.message}. Please check your server configuration and try again.`);
+        console.error('Error fetching product data:', err);
+        setError(`Failed to load product data: ${err.message}. Please try again later.`);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [config]);
+    fetchProducts();
+  }, []);
 
   // Rest of the component remains unchanged
   const addNewLine = () => {
@@ -252,8 +155,77 @@ export default function EmbroideryCalculator() {
 
   return (
     <div className="w-full p-4">
-      {/* The rest of your JSX for displaying the table remains the same */}
-      {/* Add Line button and Submit button logic remains unchanged */}
+      <h1 className="text-2xl font-bold mb-4">Embroidery Order Form</h1>
+      <table className="w-full border-collapse border border-gray-300 mb-4">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-gray-300 p-2">Style</th>
+            <th className="border border-gray-300 p-2">Color</th>
+            {SIZES.map(size => (
+              <th key={size} className="border border-gray-300 p-2">{size}</th>
+            ))}
+            <th className="border border-gray-300 p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order, index) => (
+            <tr key={index}>
+              <td className="border border-gray-300 p-2">
+                <input
+                  type="text"
+                  value={order.style}
+                  onChange={(e) => updateOrder(index, 'style', e.target.value)}
+                  className="w-full"
+                />
+              </td>
+              <td className="border border-gray-300 p-2">
+                <input
+                  type="text"
+                  value={order.color}
+                  onChange={(e) => updateOrder(index, 'color', e.target.value)}
+                  className="w-full"
+                />
+              </td>
+              {SIZES.map(size => (
+                <td key={size} className="border border-gray-300 p-2">
+                  <input
+                    type="number"
+                    value={order.quantities[size] || ''}
+                    onChange={(e) => updateQuantity(index, size, e.target.value)}
+                    className="w-full"
+                  />
+                </td>
+              ))}
+              <td className="border border-gray-300 p-2">
+                <button onClick={() => removeLine(index)} className="bg-red-500 text-white px-2 py-1 rounded">
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {orders.some(order => order.error) && (
+        <div className="text-red-500 mb-4">
+          {orders.map((order, index) => order.error && (
+            <div key={index}>Line {index + 1}: {order.error}</div>
+          ))}
+        </div>
+      )}
+      <div className="mb-4">
+        <button onClick={addNewLine} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
+          Add Line
+        </button>
+        <button onClick={handleSubmitOrder} className="bg-green-500 text-white px-4 py-2 rounded">
+          Submit Order
+        </button>
+      </div>
+      <div className="text-xl font-bold">
+        Total Quantity: {totals.quantity}
+      </div>
+      <div className="text-xl font-bold">
+        Total Price: ${totals.price.toFixed(2)}
+      </div>
     </div>
   );
 }
