@@ -195,17 +195,18 @@ export default function EmbroideryCalculator() {
           {orders.map((order, index) => (
             <tr key={index}>
               <td className="border border-gray-300 p-2">
-                {/* Temporary select element for debugging */}
-                <select
+                <input
+                  list={`styles-${index}`}
                   value={order.STYLE_No}
                   onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
                   className="w-full"
-                >
-                  <option value="">Select style</option>
+                  placeholder="Enter or select style"
+                />
+                <datalist id={`styles-${index}`}>
                   {styles.map(style => (
-                    <option key={style} value={style}>{style}</option>
+                    <option key={style} value={style} />
                   ))}
-                </select>
+                </datalist>
               </td>
               <td className="border border-gray-300 p-2">
                 <select
