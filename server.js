@@ -53,7 +53,8 @@ const fetchSanmarPricing = async () => {
     let hasMoreRecords = true;
 
     while (hasMoreRecords) {
-      const response = await axios.get(`${CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`, {
+      console.log(`Fetching page ${pageNumber}...`);
+      const response = await axios.get(`${CASPIO_API_URL}`, {
         params: {
           pageNumber: pageNumber,
           pageSize: 1000 // Adjust this value based on Caspio's maximum allowed page size
@@ -64,15 +65,20 @@ const fetchSanmarPricing = async () => {
         }
       });
 
+      console.log(`Page ${pageNumber} response status:`, response.status);
+      console.log(`Page ${pageNumber} data:`, JSON.stringify(response.data, null, 2));
+
       if (response.data.Result && response.data.Result.length > 0) {
         allRecords = allRecords.concat(response.data.Result);
         pageNumber++;
       } else {
         hasMoreRecords = false;
       }
+
+      console.log(`Total records fetched so far: ${allRecords.length}`);
     }
 
-    console.log(`Total records fetched: ${allRecords.length}`);
+    console.log(`Final total records fetched: ${allRecords.length}`);
     return allRecords;
   } catch (error) {
     console.error('Error fetching product data:', error.response ? error.response.data : error.message);
@@ -83,7 +89,9 @@ const fetchSanmarPricing = async () => {
 // API endpoint to fetch products
 app.get('/api/products', async (req, res) => {
   try {
+    console.log('Fetching products...');
     const data = await fetchSanmarPricing();
+    console.log(`Sending response with ${data.length} products`);
     res.json({ Result: data });
   } catch (error) {
     console.error('Error fetching products:', error.message);
