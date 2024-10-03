@@ -21,13 +21,15 @@ const LoadingSpinner = () => (
 export default function EmbroideryCalculator() {
   const [productDatabase, setProductDatabase] = useState({});
   const [orders, setOrders] = useState([{
-    style: "",
-    color: "",
+    STYLE_No: "",
+    COLOR_NAME: "",
     quantities: {},
     error: null
   }]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [styles, setStyles] = useState([]);
+  const [colors, setColors] = useState({});
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -40,12 +42,14 @@ export default function EmbroideryCalculator() {
         const products = response.data.Result;
 
         const formattedData = {};
+        const stylesSet = new Set();
+        const colorsMap = {};
+
         products.forEach(product => {
           if (!product.STYLE_No || !product.COLOR_NAME) return; // skip incomplete data
           const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
           if (!formattedData[key]) {
             formattedData[key] = {
-              UNIQUE_KEY: product.UNIQUE_KEY,
               PRODUCT_TITLE: product.PRODUCT_TITLE,
               STYLE_No: product.STYLE_No,
               COLOR_NAME: product.COLOR_NAME,
@@ -54,9 +58,17 @@ export default function EmbroideryCalculator() {
             };
           }
           formattedData[key].sizes[product.SIZE] = product;
+
+          stylesSet.add(product.STYLE_No);
+          if (!colorsMap[product.STYLE_No]) {
+            colorsMap[product.STYLE_No] = new Set();
+          }
+          colorsMap[product.STYLE_No].add(product.COLOR_NAME);
         });
 
         setProductDatabase(formattedData);
+        setStyles(Array.from(stylesSet));
+        setColors(Object.fromEntries(Object.entries(colorsMap).map(([style, colorSet]) => [style, Array.from(colorSet)])));
         setError(null);
       } catch (err) {
         console.error('Error fetching product data:', err);
@@ -71,8 +83,8 @@ export default function EmbroideryCalculator() {
 
   const addNewLine = () => {
     setOrders([...orders, {
-      style: "",
-      color: "",
+      STYLE_No: "",
+      COLOR_NAME: "",
       quantities: {},
       error: null
     }]);
@@ -93,12 +105,16 @@ export default function EmbroideryCalculator() {
       error: null
     };
 
-    if (field === 'style' || field === 'color') {
+    if (field === 'STYLE_No') {
+      newOrders[index].COLOR_NAME = '';
       newOrders[index].quantities = {};
-      const key = `${newOrders[index].style}-${newOrders[index].color}`;
-      if (value && !productDatabase[key]) {
-        newOrders[index].error = "Invalid style or color combination";
-      }
+    } else if (field === 'COLOR_NAME') {
+      newOrders[index].quantities = {};
+    }
+
+    const key = `${newOrders[index].STYLE_No}-${newOrders[index].COLOR_NAME}`;
+    if (newOrders[index].STYLE_No && newOrders[index].COLOR_NAME && !productDatabase[key]) {
+      newOrders[index].error = "Invalid style or color combination";
     }
 
     setOrders(newOrders);
@@ -120,7 +136,7 @@ export default function EmbroideryCalculator() {
     }, 0);
 
     return orders.reduce((acc, order) => {
-      const key = `${order.style}-${order.color}`;
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
       const product = productDatabase[key];
       if (!product) return acc;
 
@@ -157,13 +173,14 @@ export default function EmbroideryCalculator() {
   }
 
   return (
-    <div className="w-full p-4">
-      <h1 className="text-2xl font-bold mb-4">Embroidery Order Form</h1>
-      <table className="w-full border-collapse border border-gray-300 mb-4">
+    <div className="w-full p-4 bg-gray-100">
+      <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Order Form</h1>
+      <table className="w-full border-collapse border border-gray-300 mb-4 bg-white">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-gray-300 p-2">Style</th>
-            <th className="border border-gray-300 p-2">Color</th>
+          <tr className="bg-green-600 text-white">
+            <th className="border border-gray-300 p-2">Style No</th>
+            <th className="border border-gray-300 p-2">Color Name</th>
+            <th className="border border-gray-300 p-2">Product Title</th>
             {SIZES.map(size => (
               <th key={size} className="border border-gray-300 p-2">{size}</th>
             ))}
@@ -175,19 +192,33 @@ export default function EmbroideryCalculator() {
             <tr key={index}>
               <td className="border border-gray-300 p-2">
                 <input
-                  type="text"
-                  value={order.style}
-                  onChange={(e) => updateOrder(index, 'style', e.target.value)}
+                  list={`styles-${index}`}
+                  value={order.STYLE_No}
+                  onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
                   className="w-full"
+                  placeholder="Enter or select style"
                 />
+                <datalist id={`styles-${index}`}>
+                  {styles.map(style => (
+                    <option key={style} value={style} />
+                  ))}
+                </datalist>
               </td>
               <td className="border border-gray-300 p-2">
-                <input
-                  type="text"
-                  value={order.color}
-                  onChange={(e) => updateOrder(index, 'color', e.target.value)}
+                <select
+                  value={order.COLOR_NAME}
+                  onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
                   className="w-full"
-                />
+                  disabled={!order.STYLE_No}
+                >
+                  <option value="">Select Color</option>
+                  {colors[order.STYLE_No]?.map(color => (
+                    <option key={color} value={color}>{color}</option>
+                  ))}
+                </select>
+              </td>
+              <td className="border border-gray-300 p-2">
+                {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
               </td>
               {SIZES.map(size => (
                 <td key={size} className="border border-gray-300 p-2">
@@ -196,6 +227,7 @@ export default function EmbroideryCalculator() {
                     value={order.quantities[size] || ''}
                     onChange={(e) => updateQuantity(index, size, e.target.value)}
                     className="w-full"
+                    min="0"
                   />
                 </td>
               ))}
@@ -216,17 +248,17 @@ export default function EmbroideryCalculator() {
         </div>
       )}
       <div className="mb-4">
-        <button onClick={addNewLine} className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
+        <button onClick={addNewLine} className="bg-green-600 text-white px-4 py-2 rounded mr-2 hover:bg-green-700">
           Add Line
         </button>
-        <button onClick={handleSubmitOrder} className="bg-green-500 text-white px-4 py-2 rounded">
+        <button onClick={handleSubmitOrder} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
           Submit Order
         </button>
       </div>
-      <div className="text-xl font-bold">
+      <div className="text-xl font-bold text-gray-700">
         Total Quantity: {totals.quantity}
       </div>
-      <div className="text-xl font-bold">
+      <div className="text-xl font-bold text-gray-700">
         Total Price: ${totals.price.toFixed(2)}
       </div>
     </div>
