@@ -148,7 +148,4 @@ function start() {
   });
 }
 
-throng({
-  workers: WORKERS,
-  lifetime: Infinity
-}, start);
+throng(WORKERS, start);
