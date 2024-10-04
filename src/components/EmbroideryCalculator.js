@@ -41,17 +41,18 @@ export default function EmbroideryCalculator() {
 
   const fetchStyles = useCallback(async () => {
     try {
+      console.log('Fetching styles from API');
       const response = await axios.get(`${API_BASE_URL}/styles`);
-      if (response.data && response.data.length > 0) {
-        // Map response data to an array of style numbers, filtering out undefined values
+      console.log('API response:', response.data);
+      if (response.data && Array.isArray(response.data)) {
         const styleNumbers = response.data
-          .map(item => item.STYLE_No)
+          .map(item => typeof item === 'string' ? item : item.STYLE_No)
           .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
         setStyles(styleNumbers);
         setFilteredStyles(styleNumbers);
         console.log('Fetched styles:', styleNumbers);
       } else {
-        throw new Error('No styles returned from the server');
+        throw new Error('Invalid data format returned from the server');
       }
     } catch (err) {
       console.error('Error fetching styles:', err);
