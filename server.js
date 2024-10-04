@@ -74,7 +74,14 @@ function start() {
       });
 
       console.log('Received response from Caspio API');
-      return response.data.Result || [];
+      console.log('Response data structure:', JSON.stringify(response.data, null, 2));
+      
+      if (!response.data || !response.data.Result) {
+        console.log('No Result array in the response');
+        return [];
+      }
+      
+      return response.data.Result;
     } catch (error) {
       console.error('Error fetching product data:', error.message);
       if (error.response && error.response.status === 401) {
@@ -106,6 +113,7 @@ function start() {
         console.log('Returning cached styles');
       }
 
+      console.log('Sending styles to client:', styles);
       res.json(styles);
     } catch (error) {
       console.error('Error fetching styles:', error.message);
@@ -134,6 +142,8 @@ function start() {
         console.log(`Returning cached products for style ${style}`);
       }
 
+      console.log(`Sending ${products.length} products to client for style ${style}`);
+      console.log('First product:', products[0]);
       res.json(products);
     } catch (error) {
       console.error('Error fetching products:', error.message);
