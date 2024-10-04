@@ -21,6 +21,15 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Debounce function
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
 export default function EmbroideryCalculator() {
   const [productDatabase, setProductDatabase] = useState({});
   const [orders, setOrders] = useState([{
@@ -32,6 +41,7 @@ export default function EmbroideryCalculator() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [styles, setStyles] = useState([]);
+  const [filteredStyles, setFilteredStyles] = useState([]);
   const [colors, setColors] = useState({});
   const [page, setPage] = useState(1);
 
@@ -71,6 +81,7 @@ export default function EmbroideryCalculator() {
 
       setProductDatabase(prevData => ({ ...prevData, ...formattedData }));
       setStyles(prevStyles => Array.from(new Set([...prevStyles, ...Array.from(stylesSet)])));
+      setFilteredStyles(prevStyles => Array.from(new Set([...prevStyles, ...Array.from(stylesSet)])));
       setColors(prevColors => {
         const newColors = { ...prevColors };
         Object.entries(colorsMap).forEach(([style, colorSet]) => {
@@ -200,6 +211,22 @@ export default function EmbroideryCalculator() {
     );
   }, [productDatabase, updateQuantity]);
 
+  const filterStyles = useCallback(
+    debounce((value) => {
+      const filtered = styles.filter(style => 
+        style.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredStyles(filtered);
+    }, 300),
+    [styles]
+  );
+
+  const handleStyleInputChange = useCallback((e, index) => {
+    const value = e.target.value;
+    updateOrder(index, 'STYLE_No', value);
+    filterStyles(value);
+  }, [updateOrder, filterStyles]);
+
   const renderOrderRow = useCallback(({ index, style }) => {
     const order = orders[index];
     const otherSizes = Object.keys(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes || {})
@@ -211,12 +238,12 @@ export default function EmbroideryCalculator() {
           <input
             list={`styles-${index}`}
             value={order.STYLE_No}
-            onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
+            onChange={(e) => handleStyleInputChange(e, index)}
             className="w-full"
             placeholder="Enter or select style"
           />
           <datalist id={`styles-${index}`}>
-            {styles.map(style => (
+            {filteredStyles.map(style => (
               <option key={style} value={style} />
             ))}
           </datalist>
@@ -268,7 +295,7 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
+  }, [orders, filteredStyles, colors, productDatabase, updateOrder, handleStyleInputChange, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
   if (loading && page === 1) {
     return <LoadingSpinner />;
