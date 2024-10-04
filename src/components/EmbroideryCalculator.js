@@ -188,25 +188,7 @@ export default function EmbroideryCalculator() {
     const product = productDatabase[key];
     const sizeProduct = product?.sizes[size];
 
-    if (!sizeProduct) {
-      return (
-        <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-          <input
-            type="number"
-            value={order.quantities[size] || ''}
-            onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
-            className="w-full mb-1 text-sm"
-            min="0"
-            disabled
-          />
-          <div className="text-xs text-gray-500">N/A</div>
-        </div>
-      );
-    }
-
-    const basePrice = getPriceForQuantity(sizeProduct, totalQuantity);
-    const surcharge = sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
-    const price = basePrice + surcharge;
+    const isDisabled = !order.STYLE_No || !order.COLOR_NAME;
 
     return (
       <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
@@ -216,8 +198,11 @@ export default function EmbroideryCalculator() {
           onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
           className="w-full mb-1 text-sm"
           min="0"
+          disabled={isDisabled}
         />
-        <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
+        <div className="text-xs text-gray-500">
+          {sizeProduct ? `$${(getPriceForQuantity(sizeProduct, totalQuantity) + (parseFloat(sizeProduct.Surcharge) || 0)).toFixed(2)}` : 'N/A'}
+        </div>
       </div>
     );
   }, [productDatabase, updateQuantity]);
@@ -231,11 +216,13 @@ export default function EmbroideryCalculator() {
       <div style={style} className="flex items-center">
         <div className="flex-1 p-2">
           <input
-            list={`styles-${index}`}
+            type="text"
             value={order.STYLE_No}
             onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
+            onBlur={() => fetchProductData(order.STYLE_No)}
             className="w-full"
-            placeholder="Enter or select style"
+            placeholder="Enter style number"
+            list={`styles-${index}`}
           />
           <datalist id={`styles-${index}`}>
             {styles.map(style => (
@@ -291,7 +278,7 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
+  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine, fetchProductData]);
 
   if (loading) {
     return <LoadingSpinner />;
