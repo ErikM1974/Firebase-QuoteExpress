@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
-const LARGE_SIZES = ['2XL', '3XL', '4XL'];
+const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+const LARGE_SIZES = ['2XL', '3XL'];
 
 const getPriceForQuantity = (product, totalQuantity) => {
   if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
@@ -179,16 +179,34 @@ export default function EmbroideryCalculator() {
     alert('Order submitted successfully!');
   };
 
-  const getAvailableSizes = (order) => {
+  const getOtherSizes = (order) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
-    if (!product) return DEFAULT_SIZES;
+    if (!product) return [];
 
-    const availableSizes = Object.keys(product.sizes);
-    if (availableSizes.includes('OSFA')) {
-      return ['OSFA'];
-    }
-    return availableSizes.sort((a, b) => DEFAULT_SIZES.indexOf(a) - DEFAULT_SIZES.indexOf(b));
+    return Object.keys(product.sizes).filter(size => !STANDARD_SIZES.includes(size));
+  };
+
+  const renderSizeInput = (order, size, totalQuantity) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    const basePrice = product ? getPriceForQuantity(product, totalQuantity) : 0;
+    const sizeProduct = product?.sizes[size];
+    const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+    const price = basePrice + surcharge;
+
+    return (
+      <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+        <input
+          type="number"
+          value={order.quantities[size] || ''}
+          onChange={(e) => updateQuantity(order.index, size, e.target.value)}
+          className="w-full mb-1 text-sm"
+          min="0"
+        />
+        <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
+      </div>
+    );
   };
 
   const totals = calculateOrderTotals();
@@ -211,14 +229,19 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Style No</th>
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
-            <th className="border border-gray-300 p-2">Sizes</th>
+            {STANDARD_SIZES.map(size => (
+              <th key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-700' : ''}`}>
+                {size}
+              </th>
+            ))}
+            <th className="border border-gray-300 p-2">Other Sizes</th>
             <th className="border border-gray-300 p-2">Row Total</th>
             <th className="border border-gray-300 p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((order, index) => {
-            const availableSizes = getAvailableSizes(order);
+            const otherSizes = getOtherSizes(order);
             return (
               <tr key={index}>
                 <td className="border border-gray-300 p-2">
@@ -251,31 +274,18 @@ export default function EmbroideryCalculator() {
                 <td className="border border-gray-300 p-2">
                   {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
                 </td>
+                {STANDARD_SIZES.map(size => (
+                  <td key={size} className="border border-gray-300 p-2">
+                    {renderSizeInput(order, size, totals.quantity)}
+                  </td>
+                ))}
                 <td className="border border-gray-300 p-2">
-                  <div className="flex flex-wrap">
-                    {availableSizes.map(size => {
-                      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-                      const product = productDatabase[key];
-                      const basePrice = product ? getPriceForQuantity(product, totals.quantity) : 0;
-                      const sizeProduct = product?.sizes[size];
-                      const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
-                      const price = basePrice + surcharge;
-
-                      return (
-                        <div key={size} className={`w-1/4 p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-                          <div className="text-xs font-bold mb-1">{size}</div>
-                          <input
-                            type="number"
-                            value={order.quantities[size] || ''}
-                            onChange={(e) => updateQuantity(index, size, e.target.value)}
-                            className="w-full mb-1 text-sm"
-                            min="0"
-                          />
-                          <div className="text-xs text-gray-500">${price.toFixed(2)}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {otherSizes.map(size => (
+                    <div key={size} className="mb-2">
+                      <div className="text-xs font-bold">{size}</div>
+                      {renderSizeInput(order, size, totals.quantity)}
+                    </div>
+                  ))}
                 </td>
                 <td className="border border-gray-300 p-2 font-bold">
                   ${calculateRowTotal(order, totals.quantity).toFixed(2)}
