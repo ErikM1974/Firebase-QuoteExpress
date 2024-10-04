@@ -200,7 +200,8 @@ export default function EmbroideryCalculator() {
       const orderPrice = Object.entries(order.quantities).reduce((sum, [size, qty]) => {
         if (!qty) return sum;
         const sizeProduct = product.sizes[size];
-        const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+        if (!sizeProduct) return sum;
+        const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
         return sum + (basePrice + surcharge) * qty;
       }, 0);
 
@@ -223,6 +224,8 @@ export default function EmbroideryCalculator() {
 
     const isDisabled = !order.STYLE_No || !order.COLOR_NAME;
 
+    const price = sizeProduct ? getPriceForQuantity(sizeProduct, totalQuantity) + (parseFloat(sizeProduct.Surcharge) || 0) : 0;
+
     return (
       <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
         <input
@@ -234,7 +237,7 @@ export default function EmbroideryCalculator() {
           disabled={isDisabled}
         />
         <div className="text-xs text-gray-500">
-          {sizeProduct ? `$${(getPriceForQuantity(sizeProduct, totalQuantity) + (parseFloat(sizeProduct.Surcharge) || 0)).toFixed(2)}` : 'N/A'}
+          {sizeProduct ? `$${price.toFixed(2)}` : 'N/A'}
         </div>
       </div>
     );
@@ -299,7 +302,7 @@ export default function EmbroideryCalculator() {
             const sizeProduct = product.sizes[size];
             if (!sizeProduct) return sum;
             const basePrice = getPriceForQuantity(sizeProduct, calculateOrderTotals.quantity);
-            const surcharge = sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+            const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
             return sum + (basePrice + surcharge) * qty;
           }, 0)).toFixed(2)}
         </div>
