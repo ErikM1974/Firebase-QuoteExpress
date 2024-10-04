@@ -189,6 +189,7 @@ export default function EmbroideryCalculator() {
   const renderSizeInput = useCallback((order, size, totalQuantity, orderIndex) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
+    console.log(`Rendering size input for ${key}, size: ${size}`, product);
     if (!product) {
       return (
         <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
@@ -207,6 +208,7 @@ export default function EmbroideryCalculator() {
     const sizeProduct = product.sizes[size];
     const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
     const price = basePrice + surcharge;
+    console.log(`Price for ${key}, size ${size}: $${price.toFixed(2)}`);
 
     return (
       <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
@@ -226,6 +228,8 @@ export default function EmbroideryCalculator() {
     const order = orders[index];
     const otherSizes = Object.keys(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes || {})
       .filter(size => !STANDARD_SIZES.includes(size));
+
+    console.log(`Rendering order row for index ${index}:`, order);
 
     return (
       <div style={style} className="flex items-center">
