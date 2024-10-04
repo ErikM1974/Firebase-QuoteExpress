@@ -3,6 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const cors = require('cors');
+const NodeCache = require('node-cache');
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,9 @@ const CASPIO_CLIENT_SECRET = process.env.REACT_APP_CASPIO_CLIENT_SECRET;
 let accessToken = process.env.ACCESS_TOKEN;
 let refreshToken = process.env.REFRESH_TOKEN;
 let tokenExpiryTime = Date.now() + (process.env.TOKEN_EXPIRY ? parseInt(process.env.TOKEN_EXPIRY) * 1000 : 86399000);
+
+// Initialize cache
+const cache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
 
 // Function to refresh the access token
 const refreshAccessToken = async () => {
@@ -40,39 +44,37 @@ const refreshAccessToken = async () => {
 };
 
 // Function to fetch records from the Caspio API
-const fetchSanmarPricing = async () => {
+const fetchSanmarPricing = async (page, pageSize) => {
   try {
     if (Date.now() >= tokenExpiryTime) {
       await refreshAccessToken();
     }
 
-    let allRecords = [];
-    let pageNumber = 1;
-    let hasMoreRecords = true;
-
-    while (hasMoreRecords) {
-      const response = await axios.get(`${CASPIO_API_URL}`, {
-        params: {
-          pageNumber: pageNumber,
-          pageSize: 1000 // Adjust this value based on Caspio's maximum allowed page size
-        },
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'accept': 'application/json'
-        }
-      });
-
-      if (response.data.Result && response.data.Result.length > 0) {
-        allRecords = allRecords.concat(response.data.Result);
-        pageNumber++;
-        console.log(`Fetched page ${pageNumber - 1}, total records: ${allRecords.length}`);
-      } else {
-        hasMoreRecords = false;
-      }
+    const cacheKey = `products_${page}_${pageSize}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      console.log(`Returning cached data for page ${page}`);
+      return cachedData;
     }
 
-    console.log(`Total records fetched: ${allRecords.length}`);
-    return allRecords;
+    const response = await axios.get(`${CASPIO_API_URL}`, {
+      params: {
+        pageNumber: page,
+        pageSize: pageSize
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'accept': 'application/json'
+      }
+    });
+
+    if (response.data.Result && response.data.Result.length > 0) {
+      console.log(`Fetched page ${page}, records: ${response.data.Result.length}`);
+      cache.set(cacheKey, response.data.Result);
+      return response.data.Result;
+    } else {
+      return [];
+    }
   } catch (error) {
     console.error('Error fetching product data:', error.message);
     throw new Error('Failed to fetch product data');
@@ -82,10 +84,13 @@ const fetchSanmarPricing = async () => {
 // API endpoint to fetch products
 app.get('/api/products', async (req, res) => {
   try {
-    console.log('Fetching products...');
-    const data = await fetchSanmarPricing();
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 50;
+
+    console.log(`Fetching products for page ${page} with pageSize ${pageSize}...`);
+    const data = await fetchSanmarPricing(page, pageSize);
     console.log(`Sending response with ${data.length} products`);
-    res.json({ Result: data });
+    res.json({ Result: data, page, pageSize });
   } catch (error) {
     console.error('Error fetching products:', error.message);
     res.status(500).json({ error: 'Error fetching products', details: error.message });
