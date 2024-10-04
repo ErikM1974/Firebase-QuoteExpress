@@ -10,7 +10,13 @@ const WORKERS = process.env.WEB_CONCURRENCY || 1;
 const PORT = process.env.PORT || 5000;
 
 const CASPIO_API_URL = process.env.REACT_APP_CASPIO_API_URL;
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const CASPIO_TOKEN_URL = process.env.REACT_APP_CASPIO_TOKEN_URL;
+const CASPIO_CLIENT_ID = process.env.REACT_APP_CASPIO_CLIENT_ID;
+const CASPIO_CLIENT_SECRET = process.env.REACT_APP_CASPIO_CLIENT_SECRET;
+
+let ACCESS_TOKEN = "lpDHzizHBYGq_t9o1mZFS_H8zeDdZhJJzPO5_fjaICa6y96_d_q6Wbtx1NqWsyW-8AfaQmU7OFXR4FruKPACMdIFyd483N4zG49XAbJj14aIW830nDxcpi12KiTnCFdbiXlN9fegXF-A10OzUy8zP8cfs634_M7fu-nZ8K0TAIhGyQnhgsX-Dd5-qw7RRxgiPgcTzVQOLMJ2ctX6mAYq_dhsprQ_kql3A9x7UXuKdYkJkFazM_uO0Slj2O0fC9_QO4JUkneBMgPghHWggOKqaKeoQuUNH3fYNB7arw8iSPw0cX3gajNVHhUB18yPd0r1WsrjYGlJh5gEuV_G-CiZQblNch4YvHhTZ-088jVGyjJpAvx0I8e_DKj0Li06UC_d";
+let REFRESH_TOKEN = "063336a7ca2041fcad43297178ca1361e733eb7912534a028910cc96d74f3440";
+let TOKEN_EXPIRY = Date.now() + 86399000; // Set expiry to 24 hours from now
 
 function start() {
   const app = express();
@@ -23,9 +29,36 @@ function start() {
   // Initialize cache
   const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
+  // Function to refresh the access token
+  const refreshAccessToken = async () => {
+    try {
+      const response = await axios.post(CASPIO_TOKEN_URL, 
+        `grant_type=refresh_token&refresh_token=${REFRESH_TOKEN}&client_id=${CASPIO_CLIENT_ID}&client_secret=${CASPIO_CLIENT_SECRET}`,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+
+      ACCESS_TOKEN = response.data.access_token;
+      REFRESH_TOKEN = response.data.refresh_token;
+      TOKEN_EXPIRY = Date.now() + (response.data.expires_in * 1000);
+
+      console.log('Access Token refreshed');
+    } catch (error) {
+      console.error('Error refreshing access token:', error.message);
+      throw new Error('Failed to refresh access token');
+    }
+  };
+
   // Function to fetch records from the Caspio API
   const fetchSanmarPricing = async (style = null) => {
     try {
+      if (Date.now() >= TOKEN_EXPIRY) {
+        await refreshAccessToken();
+      }
+
       console.log('Fetching from Caspio API:', CASPIO_API_URL);
       const url = new URL(CASPIO_API_URL);
       url.searchParams.append('q.select', 'UNIQUE_KEY, STYLE_No, COLOR_NAME, PRODUCT_TITLE, Price_2_5, Price_6_11, Price_12_23, Price_24_47, Price_48_71, Price_72_plus, SIZE, Surcharge, SizeOrder, CapPrice_2_23, CapPrice_24_143, CapPrice_144_plus, Cap_NoCap');
@@ -44,6 +77,11 @@ function start() {
       return response.data.Result || [];
     } catch (error) {
       console.error('Error fetching product data:', error.message);
+      if (error.response && error.response.status === 401) {
+        console.log('Unauthorized error. Attempting to refresh token...');
+        await refreshAccessToken();
+        return fetchSanmarPricing(style); // Retry the request with the new token
+      }
       if (error.response) {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
@@ -113,7 +151,11 @@ function start() {
     console.log(`Server is running on port ${PORT}`);
     console.log('Environment variables:');
     console.log('REACT_APP_CASPIO_API_URL:', CASPIO_API_URL ? 'Set' : 'Not set');
-    console.log('ACCESS_TOKEN:', ACCESS_TOKEN ? 'Set' : 'Not set');
+    console.log('CASPIO_TOKEN_URL:', CASPIO_TOKEN_URL ? 'Set' : 'Not set');
+    console.log('CASPIO_CLIENT_ID:', CASPIO_CLIENT_ID ? 'Set' : 'Not set');
+    console.log('CASPIO_CLIENT_SECRET:', CASPIO_CLIENT_SECRET ? 'Set' : 'Not set');
+    console.log('ACCESS_TOKEN: Set');
+    console.log('REFRESH_TOKEN: Set');
   });
 }
 
