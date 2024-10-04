@@ -6,6 +6,7 @@ const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
 
 const getPriceForQuantity = (product, totalQuantity) => {
+  if (!product) return 0;
   if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
   if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
   if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
