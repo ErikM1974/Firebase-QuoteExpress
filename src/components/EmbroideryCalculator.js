@@ -43,7 +43,10 @@ export default function EmbroideryCalculator() {
     try {
       const response = await axios.get(`${API_BASE_URL}/styles`);
       if (response.data && response.data.length > 0) {
-        const styleNumbers = response.data.map(item => item.STYLE_No);
+        // Map response data to an array of style numbers, filtering out undefined values
+        const styleNumbers = response.data
+          .map(item => item.STYLE_No)
+          .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
         setStyles(styleNumbers);
         setFilteredStyles(styleNumbers);
         console.log('Fetched styles:', styleNumbers);
@@ -73,7 +76,8 @@ export default function EmbroideryCalculator() {
       console.log(`Received ${products.length} products for style ${style}`);
       
       if (products.length === 0) {
-        throw new Error(`No products found for style ${style}`);
+        setError(`No products found for style ${style}`);
+        return;
       }
 
       const formattedData = {};
@@ -123,8 +127,12 @@ export default function EmbroideryCalculator() {
   );
 
   const filterStyles = useCallback((input) => {
+    if (!input) {
+      setFilteredStyles(styles);
+      return;
+    }
     const filtered = styles.filter(style => 
-      style.toLowerCase().includes(input.toLowerCase())
+      typeof style === 'string' && style.toLowerCase().includes(input.toLowerCase())
     );
     setFilteredStyles(filtered);
   }, [styles]);
@@ -255,11 +263,6 @@ export default function EmbroideryCalculator() {
             placeholder="Enter style number"
             list="styles-list"
           />
-          <datalist id="styles-list">
-            {filteredStyles.map(style => (
-              <option key={style} value={style} />
-            ))}
-          </datalist>
         </div>
         <div className="flex-1 p-2">
           <select
@@ -309,7 +312,7 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, filteredStyles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
+  }, [orders, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -344,6 +347,11 @@ export default function EmbroideryCalculator() {
           {renderOrderRow}
         </List>
       </div>
+      <datalist id="styles-list">
+        {filteredStyles.map(style => (
+          <option key={style} value={style} />
+        ))}
+      </datalist>
       {orders.some(order => order.error) && (
         <div className="text-red-500 mb-4">
           {orders.map((order, index) => order.error && (
