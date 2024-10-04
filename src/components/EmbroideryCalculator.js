@@ -39,6 +39,7 @@ export default function EmbroideryCalculator() {
     try {
       const response = await axios.get('/api/styles');
       setStyles(response.data);
+      console.log('Fetched styles:', response.data);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching styles:', err);
@@ -116,6 +117,7 @@ export default function EmbroideryCalculator() {
   }, [orders.length]);
 
   const updateOrder = useCallback((index, field, value) => {
+    console.log(`Updating order: index=${index}, field=${field}, value=${value}`);
     setOrders(prevOrders => {
       const newOrders = [...prevOrders];
       newOrders[index] = {
@@ -137,6 +139,7 @@ export default function EmbroideryCalculator() {
   }, [fetchProductData]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
+    console.log(`Updating quantity: orderIndex=${orderIndex}, size=${size}, value=${value}`);
     setOrders(prevOrders => {
       const newOrders = [...prevOrders];
       const newQuantities = {
