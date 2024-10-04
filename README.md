@@ -1,6 +1,6 @@
 # Embroidery Pricing Calculator
 
-This application is an Embroidery Pricing Calculator that allows users to calculate prices for embroidered products based on style, color, size, and quantity.
+This application is an Embroidery Pricing Calculator that allows users to calculate prices for embroidered products based on style, color, size, and quantity. It uses the Caspio API to fetch product data.
 
 ## Local Development Setup
 
@@ -13,74 +13,89 @@ Follow these steps to set up and run the application locally:
    npm install
    ```
 
-3. Start the development environment:
+3. Copy the `.env.example` file to a new file named `.env`:
    ```
-   npm run dev
+   cp .env.example .env
    ```
 
-   This command will concurrently start:
-   - The React application (client) on http://localhost:3000
-   - The Express server on http://localhost:5001
-   - The mock API server on http://localhost:3002
+4. Open the `.env` file and replace the placeholder values with your actual Caspio API credentials:
+   ```
+   REACT_APP_CASPIO_API_URL=https://your-caspio-instance.caspio.com/rest/v2
+   REACT_APP_CASPIO_ACCESS_TOKEN=your_access_token_here
+   ```
 
-4. Open your browser and navigate to http://localhost:3000 to view the application.
+5. Start the development server:
+   ```
+   npm start
+   ```
 
-## Testing the Application
+6. Open your browser and navigate to http://localhost:3000 to view the application.
 
-To test the application:
+## Deploying to Production (Heroku)
 
-1. Enter a style number (e.g., "ST5000") in the STYLE# field.
-2. Select a color from the dropdown menu.
-3. Enter quantities for different sizes.
-4. The application will automatically calculate prices based on the total quantity across all orders.
-5. You can add multiple lines for different styles or colors.
+When you're ready to deploy the application to Heroku:
+
+1. Create a new Heroku app if you haven't already.
+
+2. Set the Caspio API credentials as environment variables in Heroku:
+   ```
+   heroku config:set REACT_APP_CASPIO_API_URL=https://your-caspio-instance.caspio.com/rest/v2
+   heroku config:set REACT_APP_CASPIO_ACCESS_TOKEN=your_access_token_here -a your-app-name
+   ```
+   Replace "your-app-name" with your actual Heroku app name.
+
+3. Deploy your application to Heroku:
+   ```
+   git push heroku main
+   ```
+
+4. Open your application:
+   ```
+   heroku open
+   ```
+
+## Updating the Access Token
+
+If you need to update the access token:
+
+1. For local development, update the REACT_APP_CASPIO_ACCESS_TOKEN in your `.env` file.
+
+2. For the Heroku deployment, use the following command:
+   ```
+   heroku config:set REACT_APP_CASPIO_ACCESS_TOKEN=your_new_access_token_here -a your-app-name
+   ```
+   Replace "your_new_access_token_here" with your new access token and "your-app-name" with your Heroku app name.
+
+3. After updating the token on Heroku, restart your dynos:
+   ```
+   heroku restart -a your-app-name
+   ```
+
+Remember to keep your credentials secure and never commit them to version control.
 
 ## Troubleshooting
 
-If you encounter any issues:
+If you encounter authentication issues:
 
-1. Make sure all required dependencies are installed.
-2. Check that all three servers (React app, Express server, and mock API server) are running without errors.
-3. Verify that the mock API server is correctly serving product data at http://localhost:3002/api/products.
-
-### Addressing Vulnerabilities
-
-After installation, you may see warnings about vulnerabilities. To address these:
-
-1. Run `npm audit` to see detailed information about the vulnerabilities.
-2. Run `npm audit fix` to automatically fix issues that don't require major changes.
-3. For remaining issues, you may need to update specific packages manually or wait for upstream dependencies to be updated.
-
-Note: Some vulnerabilities may be in development dependencies and not affect the production build.
-
-## Deploying to Production
-
-When you're ready to deploy the application to production:
-
-1. Update the API endpoint in `src/components/EmbroideryCalculator.js` to point to your production Caspio API.
-2. Build the React application:
-   ```
-   npm run build
-   ```
-3. Deploy the built application and the server.js file to your hosting platform (e.g., Heroku).
-
-Remember to set up any necessary environment variables on your hosting platform.
+1. Verify that your access token is correct and not expired.
+2. Check that the environment variables are set correctly in your local `.env` file or on Heroku.
+3. Ensure that your Caspio API URL is correct.
+4. If issues persist, try regenerating a new access token from your Caspio account and update it as described in the "Updating the Access Token" section.
 
 ## Project Structure
 
 - `src/components/EmbroideryCalculator.js`: Main component for the calculator
-- `server.js`: Express server for serving the React app
-- `mock-api-server.js`: Mock API server for local development
+- `src/App.js`: Root React component
 - `public/index.html`: HTML template for the React app
+- `server.js`: Simple Express server for serving the built React app
 
 ## Available Scripts
 
-- `npm run dev`: Starts the development environment
-- `npm run server`: Starts the Express server
-- `npm run client`: Starts the React development server
-- `npm run mock-api`: Starts the mock API server
-- `npm run build`: Builds the React app for production
+- `npm start`: Starts the development server
+- `npm run build`: Builds the app for production
+- `npm test`: Runs the test suite
+- `npm run eject`: Ejects from create-react-app (use with caution)
 
-## .npmrc Configuration
+## Security Note
 
-The included .npmrc file contains settings to suppress some warnings and allow the installation to proceed with potential peer dependency issues. You can modify these settings if you want to see more detailed output during npm operations.
+Never commit your `.env` file or any file containing real credentials to version control. The `.env` file is listed in `.gitignore` to prevent accidental commits.

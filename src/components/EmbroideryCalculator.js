@@ -30,6 +30,9 @@ export default function EmbroideryCalculator() {
   useEffect(() => {
     const fetchAllProducts = async () => {
       try {
+        console.log('API URL:', process.env.REACT_APP_CASPIO_API_URL);
+        console.log('Access Token (first 10 chars):', process.env.REACT_APP_CASPIO_ACCESS_TOKEN.substring(0, 10) + '...');
+        
         const response = await axios.get(`${API_ENDPOINT}?${API_PARAMS}`, {
           headers: {
             'Authorization': `Bearer ${process.env.REACT_APP_CASPIO_ACCESS_TOKEN}`
