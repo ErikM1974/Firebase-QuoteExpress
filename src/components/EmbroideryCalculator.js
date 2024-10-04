@@ -187,7 +187,7 @@ export default function EmbroideryCalculator() {
     return Object.keys(product.sizes).filter(size => !STANDARD_SIZES.includes(size));
   };
 
-  const renderSizeInput = (order, size, totalQuantity) => {
+  const renderSizeInput = (order, size, totalQuantity, orderIndex) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
     const basePrice = product ? getPriceForQuantity(product, totalQuantity) : 0;
@@ -200,7 +200,7 @@ export default function EmbroideryCalculator() {
         <input
           type="number"
           value={order.quantities[size] || ''}
-          onChange={(e) => updateQuantity(order.index, size, e.target.value)}
+          onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
           className="w-full mb-1 text-sm"
           min="0"
         />
@@ -276,14 +276,14 @@ export default function EmbroideryCalculator() {
                 </td>
                 {STANDARD_SIZES.map(size => (
                   <td key={size} className="border border-gray-300 p-2">
-                    {renderSizeInput(order, size, totals.quantity)}
+                    {renderSizeInput(order, size, totals.quantity, index)}
                   </td>
                 ))}
                 <td className="border border-gray-300 p-2">
                   {otherSizes.map(size => (
                     <div key={size} className="mb-2">
                       <div className="text-xs font-bold">{size}</div>
-                      {renderSizeInput(order, size, totals.quantity)}
+                      {renderSizeInput(order, size, totals.quantity, index)}
                     </div>
                   ))}
                 </td>
