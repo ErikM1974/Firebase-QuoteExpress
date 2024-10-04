@@ -4,7 +4,6 @@ import { FixedSizeList as List } from 'react-window';
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
-const PAGE_SIZE = 50;
 
 const getPriceForQuantity = (product, totalQuantity) => {
   if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
@@ -33,30 +32,28 @@ export default function EmbroideryCalculator() {
   const [error, setError] = useState(null);
   const [styles, setStyles] = useState([]);
   const [colors, setColors] = useState({});
-  const [page, setPage] = useState(1);
 
-  const fetchAllStyles = useCallback(async () => {
+  const fetchStyles = useCallback(async () => {
     try {
       const response = await axios.get('/api/styles');
-      if (response.data && Array.isArray(response.data)) {
-        setStyles(response.data);
-      } else {
-        throw new Error('Invalid data structure received for styles');
-      }
+      setStyles(response.data);
+      setLoading(false);
     } catch (err) {
       console.error('Error fetching styles:', err);
-      setError(`Failed to load styles: ${err.message}. Please try again later.`);
+      setError('Failed to load styles. Please try again later.');
+      setLoading(false);
     }
   }, []);
 
-  const fetchStyleData = useCallback(async (styleNo) => {
-    try {
-      const response = await axios.get(`/api/products?style=${styleNo}`);
-      if (!response.data || !Array.isArray(response.data.Result)) {
-        throw new Error('Invalid data structure received from the server');
-      }
-      const products = response.data.Result;
+  useEffect(() => {
+    fetchStyles();
+  }, [fetchStyles]);
 
+  const fetchProductData = useCallback(async (style) => {
+    try {
+      const response = await axios.get(`/api/products?style=${style}`);
+      const products = response.data.Result;
+      
       const formattedData = {};
       const colorsSet = new Set();
 
@@ -79,17 +76,13 @@ export default function EmbroideryCalculator() {
       setProductDatabase(prevData => ({ ...prevData, ...formattedData }));
       setColors(prevColors => ({
         ...prevColors,
-        [styleNo]: Array.from(colorsSet)
+        [style]: Array.from(colorsSet)
       }));
     } catch (err) {
-      console.error('Error fetching style data:', err);
-      setError(`Failed to load style data: ${err.message}. Please try again later.`);
+      console.error('Error fetching product data:', err);
+      setError('Failed to load product data. Please try again later.');
     }
   }, []);
-
-  useEffect(() => {
-    fetchAllStyles();
-  }, [fetchAllStyles]);
 
   const addNewLine = useCallback(() => {
     setOrders(prevOrders => [...prevOrders, {
@@ -118,7 +111,7 @@ export default function EmbroideryCalculator() {
       if (field === 'STYLE_No') {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
-        fetchStyleData(value);
+        fetchProductData(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
       }
@@ -130,7 +123,7 @@ export default function EmbroideryCalculator() {
 
       return newOrders;
     });
-  }, [productDatabase, fetchStyleData]);
+  }, [productDatabase, fetchProductData]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     setOrders(prevOrders => {
@@ -268,7 +261,7 @@ export default function EmbroideryCalculator() {
     );
   }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
-  if (loading && styles.length === 0) {
+  if (loading) {
     return <LoadingSpinner />;
   }
 

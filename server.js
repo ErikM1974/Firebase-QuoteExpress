@@ -21,7 +21,7 @@ let refreshToken = process.env.REFRESH_TOKEN;
 let tokenExpiryTime = Date.now() + (process.env.TOKEN_EXPIRY ? parseInt(process.env.TOKEN_EXPIRY) * 1000 : 86399000);
 
 // Initialize cache
-const cache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
+const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
 // Function to refresh the access token
 const refreshAccessToken = async () => {
@@ -44,47 +44,25 @@ const refreshAccessToken = async () => {
 };
 
 // Function to fetch records from the Caspio API
-const fetchSanmarPricing = async (style = null) => {
+const fetchSanmarPricing = async (style = null, page = 1, pageSize = 1000) => {
   try {
     if (Date.now() >= tokenExpiryTime) {
       await refreshAccessToken();
     }
 
-    const cacheKey = style ? `products_${style}` : 'all_products';
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      console.log(`Returning cached data for ${cacheKey}`);
-      return cachedData;
-    }
-
-    let allData = [];
-    let page = 1;
-    const pageSize = 1000; // Increased page size for efficiency
-
-    while (true) {
-      const response = await axios.get(`${CASPIO_API_URL}`, {
-        params: {
-          pageNumber: page,
-          pageSize: pageSize,
-          ...(style && { q: `STYLE_No='${style}'` })
-        },
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'accept': 'application/json'
-        }
-      });
-
-      if (response.data.Result && response.data.Result.length > 0) {
-        allData = allData.concat(response.data.Result);
-        console.log(`Fetched page ${page}, records: ${response.data.Result.length}`);
-        page++;
-      } else {
-        break;
+    const response = await axios.get(`${CASPIO_API_URL}`, {
+      params: {
+        pageNumber: page,
+        pageSize: pageSize,
+        ...(style && { q: `STYLE_No='${style}'` })
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'accept': 'application/json'
       }
-    }
+    });
 
-    cache.set(cacheKey, allData);
-    return allData;
+    return response.data.Result || [];
   } catch (error) {
     console.error('Error fetching product data:', error.message);
     throw new Error('Failed to fetch product data');
@@ -98,8 +76,21 @@ app.get('/api/styles', async (req, res) => {
     let styles = cache.get(cacheKey);
 
     if (!styles) {
-      const allProducts = await fetchSanmarPricing();
-      styles = [...new Set(allProducts.map(product => product.STYLE_No))];
+      let allStyles = new Set();
+      let page = 1;
+      const pageSize = 1000;
+
+      while (true) {
+        const products = await fetchSanmarPricing(null, page, pageSize);
+        if (products.length === 0) break;
+
+        products.forEach(product => allStyles.add(product.STYLE_No));
+        page++;
+
+        if (products.length < pageSize) break;
+      }
+
+      styles = Array.from(allStyles);
       cache.set(cacheKey, styles);
     }
 
@@ -110,15 +101,24 @@ app.get('/api/styles', async (req, res) => {
   }
 });
 
-// API endpoint to fetch products
+// API endpoint to fetch products for a specific style
 app.get('/api/products', async (req, res) => {
   try {
     const style = req.query.style;
 
-    console.log(`Fetching products${style ? ` for style ${style}` : ''}...`);
-    const data = await fetchSanmarPricing(style);
-    console.log(`Sending response with ${data.length} products`);
-    res.json({ Result: data });
+    if (!style) {
+      return res.status(400).json({ error: 'Style parameter is required' });
+    }
+
+    const cacheKey = `products_${style}`;
+    let products = cache.get(cacheKey);
+
+    if (!products) {
+      products = await fetchSanmarPricing(style);
+      cache.set(cacheKey, products);
+    }
+
+    res.json({ Result: products });
   } catch (error) {
     console.error('Error fetching products:', error.message);
     res.status(500).json({ error: 'Error fetching products', details: error.message });
