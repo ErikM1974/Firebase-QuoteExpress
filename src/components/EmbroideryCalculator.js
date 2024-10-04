@@ -71,7 +71,6 @@ export default function EmbroideryCalculator() {
             STYLE_No: product.STYLE_No,
             COLOR_NAME: product.COLOR_NAME,
             sizes: {},
-            ...product
           };
         }
         formattedData[key].sizes[product.SIZE] = product;
@@ -133,14 +132,9 @@ export default function EmbroideryCalculator() {
         newOrders[index].quantities = {};
       }
 
-      const key = `${newOrders[index].STYLE_No}-${newOrders[index].COLOR_NAME}`;
-      if (newOrders[index].STYLE_No && newOrders[index].COLOR_NAME && !productDatabase[key]) {
-        newOrders[index].error = "Invalid style or color combination";
-      }
-
       return newOrders;
     });
-  }, [productDatabase, fetchProductData]);
+  }, [fetchProductData]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     setOrders(prevOrders => {
@@ -189,8 +183,9 @@ export default function EmbroideryCalculator() {
   const renderSizeInput = useCallback((order, size, totalQuantity, orderIndex) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
-    console.log(`Rendering size input for ${key}, size: ${size}`, product);
-    if (!product) {
+    const sizeProduct = product?.sizes[size];
+
+    if (!sizeProduct) {
       return (
         <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
           <input
@@ -199,16 +194,16 @@ export default function EmbroideryCalculator() {
             onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
             className="w-full mb-1 text-sm"
             min="0"
+            disabled
           />
-          <div className="text-xs text-gray-500">Loading...</div>
+          <div className="text-xs text-gray-500">N/A</div>
         </div>
       );
     }
-    const basePrice = getPriceForQuantity(product, totalQuantity);
-    const sizeProduct = product.sizes[size];
-    const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+
+    const basePrice = getPriceForQuantity(sizeProduct, totalQuantity);
+    const surcharge = sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
     const price = basePrice + surcharge;
-    console.log(`Price for ${key}, size ${size}: $${price.toFixed(2)}`);
 
     return (
       <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
@@ -228,8 +223,6 @@ export default function EmbroideryCalculator() {
     const order = orders[index];
     const otherSizes = Object.keys(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes || {})
       .filter(size => !STANDARD_SIZES.includes(size));
-
-    console.log(`Rendering order row for index ${index}:`, order);
 
     return (
       <div style={style} className="flex items-center">
@@ -281,9 +274,10 @@ export default function EmbroideryCalculator() {
             const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
             const product = productDatabase[key];
             if (!product) return sum;
-            const basePrice = getPriceForQuantity(product, calculateOrderTotals.quantity);
             const sizeProduct = product.sizes[size];
-            const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
+            if (!sizeProduct) return sum;
+            const basePrice = getPriceForQuantity(sizeProduct, calculateOrderTotals.quantity);
+            const surcharge = sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
             return sum + (basePrice + surcharge) * qty;
           }, 0)).toFixed(2)}
         </div>
