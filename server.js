@@ -9,6 +9,9 @@ const throng = require('throng');
 const WORKERS = process.env.WEB_CONCURRENCY || 1;
 const PORT = process.env.PORT || 5000;
 
+const CASPIO_API_URL = process.env.REACT_APP_CASPIO_API_URL;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+
 function start() {
   const app = express();
   app.use(cors());
@@ -17,59 +20,34 @@ function start() {
   // Serve static files from the React app
   app.use(express.static(path.join(__dirname, 'build')));
 
-  const CASPIO_API_URL = process.env.REACT_APP_CASPIO_API_URL;
-  const CASPIO_TOKEN_URL = process.env.REACT_APP_CASPIO_TOKEN_URL;
-  const CASPIO_CLIENT_ID = process.env.REACT_APP_CASPIO_CLIENT_ID;
-  const CASPIO_CLIENT_SECRET = process.env.REACT_APP_CASPIO_CLIENT_SECRET;
-  let accessToken = process.env.ACCESS_TOKEN;
-  let refreshToken = process.env.REFRESH_TOKEN;
-  let tokenExpiryTime = Date.now() + (process.env.TOKEN_EXPIRY ? parseInt(process.env.TOKEN_EXPIRY) * 1000 : 86399000);
-
   // Initialize cache
   const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
-  // Function to refresh the access token
-  const refreshAccessToken = async () => {
-    try {
-      const response = await axios.post(CASPIO_TOKEN_URL, `grant_type=refresh_token&refresh_token=${refreshToken}&client_id=${CASPIO_CLIENT_ID}&client_secret=${CASPIO_CLIENT_SECRET}`, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      accessToken = response.data.access_token;
-      refreshToken = response.data.refresh_token;
-      tokenExpiryTime = Date.now() + response.data.expires_in * 1000;
-
-      console.log('Access Token refreshed');
-    } catch (error) {
-      console.error('Error refreshing access token:', error.message);
-      throw new Error('Failed to refresh access token');
-    }
-  };
-
   // Function to fetch records from the Caspio API
-  const fetchSanmarPricing = async (style = null, page = 1, pageSize = 1000) => {
+  const fetchSanmarPricing = async (style = null) => {
     try {
-      if (Date.now() >= tokenExpiryTime) {
-        await refreshAccessToken();
+      console.log('Fetching from Caspio API:', CASPIO_API_URL);
+      const url = new URL(CASPIO_API_URL);
+      url.searchParams.append('q.select', 'UNIQUE_KEY, STYLE_No, COLOR_NAME, PRODUCT_TITLE, Price_2_5, Price_6_11, Price_12_23, Price_24_47, Price_48_71, Price_72_plus, SIZE, Surcharge, SizeOrder, CapPrice_2_23, CapPrice_24_143, CapPrice_144_plus, Cap_NoCap');
+      if (style) {
+        url.searchParams.append('q.where', `STYLE_No='${style}'`);
       }
 
-      const response = await axios.get(`${CASPIO_API_URL}`, {
-        params: {
-          pageNumber: page,
-          pageSize: pageSize,
-          ...(style && { q: `STYLE_No='${style}'` })
-        },
+      const response = await axios.get(url.toString(), {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${ACCESS_TOKEN}`,
           'accept': 'application/json'
         }
       });
 
+      console.log('Received response from Caspio API');
       return response.data.Result || [];
     } catch (error) {
       console.error('Error fetching product data:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      }
       throw new Error('Failed to fetch product data');
     }
   };
@@ -81,22 +59,13 @@ function start() {
       let styles = cache.get(cacheKey);
 
       if (!styles) {
-        let allStyles = new Set();
-        let page = 1;
-        const pageSize = 1000;
-
-        while (true) {
-          const products = await fetchSanmarPricing(null, page, pageSize);
-          if (products.length === 0) break;
-
-          products.forEach(product => allStyles.add(product.STYLE_No));
-          page++;
-
-          if (products.length < pageSize) break;
-        }
-
-        styles = Array.from(allStyles);
+        console.log('Fetching all styles from Caspio API');
+        const products = await fetchSanmarPricing();
+        styles = [...new Set(products.map(product => product.STYLE_No))];
         cache.set(cacheKey, styles);
+        console.log(`Cached ${styles.length} styles`);
+      } else {
+        console.log('Returning cached styles');
       }
 
       res.json(styles);
@@ -119,11 +88,15 @@ function start() {
       let products = cache.get(cacheKey);
 
       if (!products) {
+        console.log(`Fetching products for style ${style} from Caspio API`);
         products = await fetchSanmarPricing(style);
         cache.set(cacheKey, products);
+        console.log(`Cached ${products.length} products for style ${style}`);
+      } else {
+        console.log(`Returning cached products for style ${style}`);
       }
 
-      res.json({ Result: products });
+      res.json(products);
     } catch (error) {
       console.error('Error fetching products:', error.message);
       res.status(500).json({ error: 'Error fetching products', details: error.message });
@@ -139,12 +112,8 @@ function start() {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log('Environment variables:');
-    console.log('CASPIO_API_URL:', CASPIO_API_URL ? 'Set' : 'Not set');
-    console.log('CASPIO_TOKEN_URL:', CASPIO_TOKEN_URL ? 'Set' : 'Not set');
-    console.log('CASPIO_CLIENT_ID:', CASPIO_CLIENT_ID ? 'Set' : 'Not set');
-    console.log('CASPIO_CLIENT_SECRET:', CASPIO_CLIENT_SECRET ? 'Set' : 'Not set');
-    console.log('ACCESS_TOKEN:', accessToken ? 'Set' : 'Not set');
-    console.log('REFRESH_TOKEN:', refreshToken ? 'Set' : 'Not set');
+    console.log('REACT_APP_CASPIO_API_URL:', CASPIO_API_URL ? 'Set' : 'Not set');
+    console.log('ACCESS_TOKEN:', ACCESS_TOKEN ? 'Set' : 'Not set');
   });
 }
 
