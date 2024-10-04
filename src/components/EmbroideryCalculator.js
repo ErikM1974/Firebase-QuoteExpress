@@ -43,9 +43,10 @@ export default function EmbroideryCalculator() {
     try {
       const response = await axios.get(`${API_BASE_URL}/styles`);
       if (response.data && response.data.length > 0) {
-        setStyles(response.data);
-        setFilteredStyles(response.data);
-        console.log('Fetched styles:', response.data);
+        const styleNumbers = response.data.map(item => item.STYLE_No);
+        setStyles(styleNumbers);
+        setFilteredStyles(styleNumbers);
+        console.log('Fetched styles:', styleNumbers);
       } else {
         throw new Error('No styles returned from the server');
       }
@@ -128,11 +129,6 @@ export default function EmbroideryCalculator() {
     setFilteredStyles(filtered);
   }, [styles]);
 
-  const debouncedFilterStyles = useMemo(
-    () => debounce(filterStyles, 300),
-    [filterStyles]
-  );
-
   const addNewLine = useCallback(() => {
     setOrders(prevOrders => [...prevOrders, {
       STYLE_No: "",
@@ -162,14 +158,14 @@ export default function EmbroideryCalculator() {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
         debouncedFetchProductData(value);
-        debouncedFilterStyles(value);
+        filterStyles(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
       }
 
       return newOrders;
     });
-  }, [debouncedFetchProductData, debouncedFilterStyles]);
+  }, [debouncedFetchProductData, filterStyles]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     console.log(`Updating quantity: orderIndex=${orderIndex}, size=${size}, value=${value}`);
@@ -257,9 +253,9 @@ export default function EmbroideryCalculator() {
             onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
             className="w-full"
             placeholder="Enter style number"
-            list={`styles-${index}`}
+            list="styles-list"
           />
-          <datalist id={`styles-${index}`}>
+          <datalist id="styles-list">
             {filteredStyles.map(style => (
               <option key={style} value={style} />
             ))}
