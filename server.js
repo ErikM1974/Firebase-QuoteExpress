@@ -44,53 +44,81 @@ const refreshAccessToken = async () => {
 };
 
 // Function to fetch records from the Caspio API
-const fetchSanmarPricing = async (page, pageSize) => {
+const fetchSanmarPricing = async (style = null) => {
   try {
     if (Date.now() >= tokenExpiryTime) {
       await refreshAccessToken();
     }
 
-    const cacheKey = `products_${page}_${pageSize}`;
+    const cacheKey = style ? `products_${style}` : 'all_products';
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
-      console.log(`Returning cached data for page ${page}`);
+      console.log(`Returning cached data for ${cacheKey}`);
       return cachedData;
     }
 
-    const response = await axios.get(`${CASPIO_API_URL}`, {
-      params: {
-        pageNumber: page,
-        pageSize: pageSize
-      },
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'accept': 'application/json'
-      }
-    });
+    let allData = [];
+    let page = 1;
+    const pageSize = 1000; // Increased page size for efficiency
 
-    if (response.data.Result && response.data.Result.length > 0) {
-      console.log(`Fetched page ${page}, records: ${response.data.Result.length}`);
-      cache.set(cacheKey, response.data.Result);
-      return response.data.Result;
-    } else {
-      return [];
+    while (true) {
+      const response = await axios.get(`${CASPIO_API_URL}`, {
+        params: {
+          pageNumber: page,
+          pageSize: pageSize,
+          ...(style && { q: `STYLE_No='${style}'` })
+        },
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'accept': 'application/json'
+        }
+      });
+
+      if (response.data.Result && response.data.Result.length > 0) {
+        allData = allData.concat(response.data.Result);
+        console.log(`Fetched page ${page}, records: ${response.data.Result.length}`);
+        page++;
+      } else {
+        break;
+      }
     }
+
+    cache.set(cacheKey, allData);
+    return allData;
   } catch (error) {
     console.error('Error fetching product data:', error.message);
     throw new Error('Failed to fetch product data');
   }
 };
 
+// API endpoint to fetch all unique style numbers
+app.get('/api/styles', async (req, res) => {
+  try {
+    const cacheKey = 'all_styles';
+    let styles = cache.get(cacheKey);
+
+    if (!styles) {
+      const allProducts = await fetchSanmarPricing();
+      styles = [...new Set(allProducts.map(product => product.STYLE_No))];
+      cache.set(cacheKey, styles);
+    }
+
+    res.json(styles);
+  } catch (error) {
+    console.error('Error fetching styles:', error.message);
+    res.status(500).json({ error: 'Error fetching styles', details: error.message });
+  }
+});
+
 // API endpoint to fetch products
 app.get('/api/products', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 50;
+    const style = req.query.style;
 
-    console.log(`Fetching products for page ${page} with pageSize ${pageSize}...`);
-    const data = await fetchSanmarPricing(page, pageSize);
+    console.log(`Fetching products${style ? ` for style ${style}` : ''}...`);
+    const data = await fetchSanmarPricing(style);
     console.log(`Sending response with ${data.length} products`);
-    res.json({ Result: data, page, pageSize });
+    res.json({ Result: data });
   } catch (error) {
     console.error('Error fetching products:', error.message);
     res.status(500).json({ error: 'Error fetching products', details: error.message });

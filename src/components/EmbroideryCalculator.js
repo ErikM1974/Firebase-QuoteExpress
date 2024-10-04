@@ -21,15 +21,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Debounce function
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
-  };
-};
-
 export default function EmbroideryCalculator() {
   const [productDatabase, setProductDatabase] = useState({});
   const [orders, setOrders] = useState([{
@@ -41,22 +32,33 @@ export default function EmbroideryCalculator() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [styles, setStyles] = useState([]);
-  const [filteredStyles, setFilteredStyles] = useState([]);
   const [colors, setColors] = useState({});
   const [page, setPage] = useState(1);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
+  const fetchAllStyles = useCallback(async () => {
     try {
-      const response = await axios.get(`/api/products?page=${page}&pageSize=${PAGE_SIZE}`);
+      const response = await axios.get('/api/styles');
+      if (response.data && Array.isArray(response.data)) {
+        setStyles(response.data);
+      } else {
+        throw new Error('Invalid data structure received for styles');
+      }
+    } catch (err) {
+      console.error('Error fetching styles:', err);
+      setError(`Failed to load styles: ${err.message}. Please try again later.`);
+    }
+  }, []);
+
+  const fetchStyleData = useCallback(async (styleNo) => {
+    try {
+      const response = await axios.get(`/api/products?style=${styleNo}`);
       if (!response.data || !Array.isArray(response.data.Result)) {
         throw new Error('Invalid data structure received from the server');
       }
       const products = response.data.Result;
 
       const formattedData = {};
-      const stylesSet = new Set();
-      const colorsMap = {};
+      const colorsSet = new Set();
 
       products.forEach(product => {
         if (!product.STYLE_No || !product.COLOR_NAME) return;
@@ -71,39 +73,23 @@ export default function EmbroideryCalculator() {
           };
         }
         formattedData[key].sizes[product.SIZE] = product;
-
-        stylesSet.add(product.STYLE_No);
-        if (!colorsMap[product.STYLE_No]) {
-          colorsMap[product.STYLE_No] = new Set();
-        }
-        colorsMap[product.STYLE_No].add(product.COLOR_NAME);
+        colorsSet.add(product.COLOR_NAME);
       });
 
       setProductDatabase(prevData => ({ ...prevData, ...formattedData }));
-      setStyles(prevStyles => Array.from(new Set([...prevStyles, ...Array.from(stylesSet)])));
-      setFilteredStyles(prevStyles => Array.from(new Set([...prevStyles, ...Array.from(stylesSet)])));
-      setColors(prevColors => {
-        const newColors = { ...prevColors };
-        Object.entries(colorsMap).forEach(([style, colorSet]) => {
-          if (!newColors[style]) {
-            newColors[style] = [];
-          }
-          newColors[style] = Array.from(new Set([...newColors[style], ...Array.from(colorSet)]));
-        });
-        return newColors;
-      });
-      setError(null);
+      setColors(prevColors => ({
+        ...prevColors,
+        [styleNo]: Array.from(colorsSet)
+      }));
     } catch (err) {
-      console.error('Error fetching product data:', err);
-      setError(`Failed to load product data: ${err.message}. Please try again later.`);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching style data:', err);
+      setError(`Failed to load style data: ${err.message}. Please try again later.`);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    fetchAllStyles();
+  }, [fetchAllStyles]);
 
   const addNewLine = useCallback(() => {
     setOrders(prevOrders => [...prevOrders, {
@@ -132,6 +118,7 @@ export default function EmbroideryCalculator() {
       if (field === 'STYLE_No') {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
+        fetchStyleData(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
       }
@@ -143,7 +130,7 @@ export default function EmbroideryCalculator() {
 
       return newOrders;
     });
-  }, [productDatabase]);
+  }, [productDatabase, fetchStyleData]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     setOrders(prevOrders => {
@@ -211,22 +198,6 @@ export default function EmbroideryCalculator() {
     );
   }, [productDatabase, updateQuantity]);
 
-  const filterStyles = useCallback(
-    debounce((value) => {
-      const filtered = styles.filter(style => 
-        style.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredStyles(filtered);
-    }, 300),
-    [styles]
-  );
-
-  const handleStyleInputChange = useCallback((e, index) => {
-    const value = e.target.value;
-    updateOrder(index, 'STYLE_No', value);
-    filterStyles(value);
-  }, [updateOrder, filterStyles]);
-
   const renderOrderRow = useCallback(({ index, style }) => {
     const order = orders[index];
     const otherSizes = Object.keys(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes || {})
@@ -238,12 +209,12 @@ export default function EmbroideryCalculator() {
           <input
             list={`styles-${index}`}
             value={order.STYLE_No}
-            onChange={(e) => handleStyleInputChange(e, index)}
+            onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
             className="w-full"
             placeholder="Enter or select style"
           />
           <datalist id={`styles-${index}`}>
-            {filteredStyles.map(style => (
+            {styles.map(style => (
               <option key={style} value={style} />
             ))}
           </datalist>
@@ -295,9 +266,9 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, filteredStyles, colors, productDatabase, updateOrder, handleStyleInputChange, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
+  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
-  if (loading && page === 1) {
+  if (loading && styles.length === 0) {
     return <LoadingSpinner />;
   }
 
@@ -346,11 +317,6 @@ export default function EmbroideryCalculator() {
         <button onClick={handleSubmitOrder} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
           Submit Order
         </button>
-        {page * PAGE_SIZE < styles.length && (
-          <button onClick={() => setPage(prevPage => prevPage + 1)} className="bg-blue-500 text-white px-4 py-2 rounded ml-2 hover:bg-blue-600">
-            Load More Styles
-          </button>
-        )}
       </div>
       <div className="text-xl font-bold text-gray-700">
         Total Quantity: {calculateOrderTotals.quantity}
