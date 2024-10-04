@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
-import { FixedSizeList as List } from 'react-window';
-import debounce from 'lodash/debounce';
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
 
-const API_BASE_URL = '/api'; // This will be proxied to our server
+const API_ENDPOINT = `${process.env.REACT_APP_CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`;
+const API_PARAMS = 'q.select=UNIQUE_KEY%2C%20STYLE_No%2C%20COLOR_NAME%2C%20PRODUCT_TITLE%2C%20Price_2_5%2C%20Price_6_11%2C%20Price_12_23%2C%20Price_24_47%2C%20Price_48_71%2C%20Price_72_plus%2C%20SIZE%2C%20Surcharge%2C%20SizeOrder%2C%20CapPrice_2_23%2C%20CapPrice_24_143%2C%20CapPrice_144_plus%2C%20Cap_NoCap';
 
 const getPriceForQuantity = (product, totalQuantity) => {
   if (!product) return 0;
@@ -18,361 +17,143 @@ const getPriceForQuantity = (product, totalQuantity) => {
   return parseFloat(product.Price_2_5) || 0;
 };
 
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center h-screen">
-    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-  </div>
-);
-
 export default function EmbroideryCalculator() {
-  const [productDatabase, setProductDatabase] = useState({});
-  const [orders, setOrders] = useState([{
-    STYLE_No: "",
-    COLOR_NAME: "",
-    quantities: {},
-    error: null
-  }]);
-  const [loading, setLoading] = useState(true);
-  const [loadingProduct, setLoadingProduct] = useState(false);
-  const [error, setError] = useState(null);
+  const [allProducts, setAllProducts] = useState([]);
   const [styles, setStyles] = useState([]);
-  const [filteredStyles, setFilteredStyles] = useState([]);
-  const [colors, setColors] = useState({});
+  const [selectedStyle, setSelectedStyle] = useState('');
+  const [colors, setColors] = useState([]);
+  const [selectedColor, setSelectedColor] = useState('');
+  const [quantities, setQuantities] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const fetchStyles = useCallback(async () => {
-    try {
-      console.log('Fetching styles from API');
-      const response = await axios.get(`${API_BASE_URL}/styles`);
-      console.log('API response:', response.data);
-      if (response.data && Array.isArray(response.data)) {
-        const styleNumbers = response.data
-          .map(item => typeof item === 'string' ? item : item.STYLE_No)
-          .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
-        setStyles(styleNumbers);
-        setFilteredStyles(styleNumbers);
-        console.log('Fetched styles:', styleNumbers);
-      } else {
-        throw new Error('Invalid data format returned from the server');
+  useEffect(() => {
+    const fetchAllProducts = async () => {
+      try {
+        const response = await axios.get(`${API_ENDPOINT}?${API_PARAMS}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.REACT_APP_CASPIO_ACCESS_TOKEN}`
+          }
+        });
+        setAllProducts(response.data.Result);
+        const uniqueStyles = [...new Set(response.data.Result.map(p => p.STYLE_No))];
+        setStyles(uniqueStyles);
+      } catch (err) {
+        if (err.response && err.response.status === 401) {
+          setError('Authentication failed. Please check your access token.');
+        } else if (err.response && err.response.status === 429) {
+          setError('API rate limit exceeded. Please try again later.');
+        } else {
+          setError('Failed to load product data. Please try again later.');
+        }
+        console.error('API Error:', err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching styles:', err);
-      setError('Failed to load styles. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
+    };
+    fetchAllProducts();
   }, []);
 
   useEffect(() => {
-    fetchStyles();
-  }, [fetchStyles]);
-
-  const fetchProductData = useCallback(async (style) => {
-    if (!style) return;
-    setLoadingProduct(true);
-    setError(null);
-    try {
-      console.log(`Fetching product data for style: ${style}`);
-      const response = await axios.get(`${API_BASE_URL}/products?style=${style}`);
-      const products = response.data;
-      console.log(`Received ${products.length} products for style ${style}`);
-      
-      if (products.length === 0) {
-        setError(`No products found for style ${style}`);
-        return;
-      }
-
-      const formattedData = {};
-      const colorsSet = new Set();
-
-      products.forEach(product => {
-        if (!product.STYLE_No || !product.COLOR_NAME) return;
-        const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
-        if (!formattedData[key]) {
-          formattedData[key] = {
-            PRODUCT_TITLE: product.PRODUCT_TITLE,
-            STYLE_No: product.STYLE_No,
-            COLOR_NAME: product.COLOR_NAME,
-            sizes: {},
-          };
-        }
-        formattedData[key].sizes[product.SIZE] = product;
-        colorsSet.add(product.COLOR_NAME);
-      });
-
-      console.log(`Formatted data for style ${style}:`, formattedData);
-
-      setProductDatabase(prevData => {
-        const newData = { ...prevData, ...formattedData };
-        console.log('Updated product database:', newData);
-        return newData;
-      });
-      setColors(prevColors => {
-        const newColors = {
-          ...prevColors,
-          [style]: Array.from(colorsSet)
-        };
-        console.log('Updated colors:', newColors);
-        return newColors;
-      });
-    } catch (err) {
-      console.error('Error fetching product data:', err);
-      setError(`Failed to load product data for style ${style}. ${err.message}`);
-    } finally {
-      setLoadingProduct(false);
+    if (selectedStyle) {
+      const styleProducts = allProducts.filter(p => p.STYLE_No === selectedStyle);
+      const uniqueColors = [...new Set(styleProducts.map(p => p.COLOR_NAME))];
+      setColors(uniqueColors);
+    } else {
+      setColors([]);
     }
-  }, []);
+    setSelectedColor('');
+    setQuantities({});
+  }, [selectedStyle, allProducts]);
 
-  const debouncedFetchProductData = useMemo(
-    () => debounce(fetchProductData, 300),
-    [fetchProductData]
+  const handleStyleChange = (e) => {
+    setSelectedStyle(e.target.value);
+  };
+
+  const handleColorChange = (e) => {
+    setSelectedColor(e.target.value);
+    setQuantities({});
+  };
+
+  const handleQuantityChange = (size, value) => {
+    setQuantities(prev => ({ ...prev, [size]: parseInt(value) || 0 }));
+  };
+
+  const totalQuantity = useMemo(() => 
+    Object.values(quantities).reduce((sum, qty) => sum + qty, 0),
+    [quantities]
   );
 
-  const filterStyles = useCallback((input) => {
-    if (!input) {
-      setFilteredStyles(styles);
-      return;
-    }
-    const filtered = styles.filter(style => 
-      typeof style === 'string' && style.toLowerCase().includes(input.toLowerCase())
-    );
-    setFilteredStyles(filtered);
-  }, [styles]);
-
-  const addNewLine = useCallback(() => {
-    setOrders(prevOrders => [...prevOrders, {
-      STYLE_No: "",
-      COLOR_NAME: "",
-      quantities: {},
-      error: null
-    }]);
-  }, []);
-
-  const removeLine = useCallback((index) => {
-    if (orders.length > 1) {
-      setOrders(prevOrders => prevOrders.filter((_, i) => i !== index));
-    }
-  }, [orders.length]);
-
-  const updateOrder = useCallback((index, field, value) => {
-    console.log(`Updating order: index=${index}, field=${field}, value=${value}`);
-    setOrders(prevOrders => {
-      const newOrders = [...prevOrders];
-      newOrders[index] = {
-        ...newOrders[index],
-        [field]: value,
-        error: null
-      };
-
-      if (field === 'STYLE_No') {
-        newOrders[index].COLOR_NAME = '';
-        newOrders[index].quantities = {};
-        debouncedFetchProductData(value);
-        filterStyles(value);
-      } else if (field === 'COLOR_NAME') {
-        newOrders[index].quantities = {};
-      }
-
-      return newOrders;
-    });
-  }, [debouncedFetchProductData, filterStyles]);
-
-  const updateQuantity = useCallback((orderIndex, size, value) => {
-    console.log(`Updating quantity: orderIndex=${orderIndex}, size=${size}, value=${value}`);
-    setOrders(prevOrders => {
-      const newOrders = [...prevOrders];
-      const newQuantities = {
-        ...newOrders[orderIndex].quantities,
-        [size]: parseInt(value) || 0
-      };
-      newOrders[orderIndex].quantities = newQuantities;
-      return newOrders;
-    });
-  }, []);
-
-  const calculateOrderTotals = useMemo(() => {
-    const totalQuantity = orders.reduce((acc, order) => {
-      return acc + Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
+  const totalPrice = useMemo(() => {
+    if (!selectedStyle || !selectedColor) return 0;
+    const products = allProducts.filter(p => p.STYLE_No === selectedStyle && p.COLOR_NAME === selectedColor);
+    if (products.length === 0) return 0;
+    const basePrice = getPriceForQuantity(products[0], totalQuantity);
+    return Object.entries(quantities).reduce((sum, [size, qty]) => {
+      const sizeProduct = products.find(p => p.SIZE === size);
+      if (!sizeProduct) return sum;
+      const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
+      return sum + (basePrice + surcharge) * qty;
     }, 0);
+  }, [allProducts, selectedStyle, selectedColor, quantities, totalQuantity]);
 
-    return orders.reduce((acc, order) => {
-      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-      const product = productDatabase[key];
-      if (!product) return acc;
+  if (loading) return <div className="text-center py-4">Loading product data...</div>;
+  if (error) return <div className="text-red-500 text-center py-4">{error}</div>;
 
-      const orderQuantity = Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
-      const basePrice = getPriceForQuantity(product, totalQuantity);
-
-      const orderPrice = Object.entries(order.quantities).reduce((sum, [size, qty]) => {
-        if (!qty) return sum;
-        const sizeProduct = product.sizes[size];
-        if (!sizeProduct) return sum;
-        const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
-        return sum + (basePrice + surcharge) * qty;
-      }, 0);
-
-      return {
-        quantity: acc.quantity + orderQuantity,
-        price: acc.price + orderPrice
-      };
-    }, { quantity: 0, price: 0 });
-  }, [orders, productDatabase]);
-
-  const handleSubmitOrder = useCallback(() => {
-    console.log('Submitting order:', orders);
-    alert('Order submitted successfully!');
-  }, [orders]);
-
-  const renderSizeInput = useCallback((order, size, totalQuantity, orderIndex) => {
-    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-    const product = productDatabase[key];
-    const sizeProduct = product?.sizes[size];
-
-    const isDisabled = !order.STYLE_No || !order.COLOR_NAME;
-
-    const price = sizeProduct ? getPriceForQuantity(sizeProduct, totalQuantity) + (parseFloat(sizeProduct.Surcharge) || 0) : 0;
-
-    return (
-      <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-        <input
-          type="number"
-          value={order.quantities[size] || ''}
-          onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
-          className="w-full mb-1 text-sm"
-          min="0"
-          disabled={isDisabled}
-        />
-        <div className="text-xs text-gray-500">
-          {sizeProduct ? `$${price.toFixed(2)}` : 'N/A'}
-        </div>
+  return (
+    <div className="w-full p-4 bg-gray-100">
+      <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
+      <div className="mb-4">
+        <label className="block mb-2">Style Number:</label>
+        <select 
+          value={selectedStyle} 
+          onChange={handleStyleChange}
+          className="w-full p-2 border rounded"
+        >
+          <option value="">Select a style</option>
+          {styles.map(style => (
+            <option key={style} value={style}>{style}</option>
+          ))}
+        </select>
       </div>
-    );
-  }, [productDatabase, updateQuantity]);
-
-  const renderOrderRow = useCallback(({ index, style }) => {
-    const order = orders[index];
-    const otherSizes = Object.keys(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes || {})
-      .filter(size => !STANDARD_SIZES.includes(size));
-
-    return (
-      <div style={style} className="flex items-center">
-        <div className="flex-1 p-2">
-          <input
-            type="text"
-            value={order.STYLE_No}
-            onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
-            className="w-full"
-            placeholder="Enter style number"
-            list="styles-list"
-          />
-        </div>
-        <div className="flex-1 p-2">
-          <select
-            value={order.COLOR_NAME}
-            onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
-            className="w-full"
-            disabled={!order.STYLE_No}
+      {selectedStyle && (
+        <div className="mb-4">
+          <label className="block mb-2">Color:</label>
+          <select 
+            value={selectedColor} 
+            onChange={handleColorChange}
+            className="w-full p-2 border rounded"
           >
-            <option value="">Select Color</option>
-            {colors[order.STYLE_No]?.map(color => (
+            <option value="">Select a color</option>
+            {colors.map(color => (
               <option key={color} value={color}>{color}</option>
             ))}
           </select>
         </div>
-        <div className="flex-1 p-2">
-          {productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.PRODUCT_TITLE || ''}
-        </div>
-        {STANDARD_SIZES.map(size => (
-          <div key={size} className="flex-1 p-2">
-            {renderSizeInput(order, size, calculateOrderTotals.quantity, index)}
+      )}
+      {selectedColor && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mb-2">Quantities:</h2>
+          <div className="grid grid-cols-3 gap-4">
+            {STANDARD_SIZES.map(size => (
+              <div key={size} className={`p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+                <label className="block mb-1">{size}:</label>
+                <input
+                  type="number"
+                  value={quantities[size] || ''}
+                  onChange={(e) => handleQuantityChange(size, e.target.value)}
+                  className="w-full p-1 border rounded"
+                  min="0"
+                />
+              </div>
+            ))}
           </div>
-        ))}
-        <div className="flex-1 p-2">
-          {otherSizes.map(size => (
-            <div key={size} className="mb-2">
-              <div className="text-xs font-bold">{size}</div>
-              {renderSizeInput(order, size, calculateOrderTotals.quantity, index)}
-            </div>
-          ))}
-        </div>
-        <div className="flex-1 p-2 font-bold">
-          ${(Object.entries(order.quantities).reduce((sum, [size, qty]) => {
-            const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-            const product = productDatabase[key];
-            if (!product) return sum;
-            const sizeProduct = product.sizes[size];
-            if (!sizeProduct) return sum;
-            const basePrice = getPriceForQuantity(sizeProduct, calculateOrderTotals.quantity);
-            const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
-            return sum + (basePrice + surcharge) * qty;
-          }, 0)).toFixed(2)}
-        </div>
-        <div className="flex-1 p-2">
-          <button onClick={() => removeLine(index)} className="bg-red-500 text-white px-2 py-1 rounded">
-            Remove
-          </button>
-        </div>
-      </div>
-    );
-  }, [orders, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  return (
-    <div className="w-full p-4 bg-gray-100">
-      <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Order Form</h1>
-      <p className="mb-4">Number of styles available: {styles.length}</p>
-      {loadingProduct && <p className="mb-4 text-blue-600">Loading product data...</p>}
-      {error && <p className="mb-4 text-red-500">{error}</p>}
-      <div className="mb-4 bg-white">
-        <div className="flex bg-green-600 text-white">
-          <div className="flex-1 p-2">Style No</div>
-          <div className="flex-1 p-2">Color Name</div>
-          <div className="flex-1 p-2">Product Title</div>
-          {STANDARD_SIZES.map(size => (
-            <div key={size} className={`flex-1 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-700' : ''}`}>
-              {size}
-            </div>
-          ))}
-          <div className="flex-1 p-2">Other Sizes</div>
-          <div className="flex-1 p-2">Row Total</div>
-          <div className="flex-1 p-2">Actions</div>
-        </div>
-        <List
-          height={400}
-          itemCount={orders.length}
-          itemSize={100}
-          width="100%"
-        >
-          {renderOrderRow}
-        </List>
-      </div>
-      <datalist id="styles-list">
-        {filteredStyles.map(style => (
-          <option key={style} value={style} />
-        ))}
-      </datalist>
-      {orders.some(order => order.error) && (
-        <div className="text-red-500 mb-4">
-          {orders.map((order, index) => order.error && (
-            <div key={index}>Line {index + 1}: {order.error}</div>
-          ))}
         </div>
       )}
-      <div className="mb-4">
-        <button onClick={addNewLine} className="bg-green-600 text-white px-4 py-2 rounded mr-2 hover:bg-green-700">
-          Add Line
-        </button>
-        <button onClick={handleSubmitOrder} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-          Submit Order
-        </button>
-      </div>
-      <div className="text-xl font-bold text-gray-700">
-        Total Quantity: {calculateOrderTotals.quantity}
-      </div>
-      <div className="text-xl font-bold text-gray-700">
-        Total Price: ${calculateOrderTotals.price.toFixed(2)}
+      <div className="mt-4">
+        <h2 className="text-xl font-bold">Order Summary:</h2>
+        <p>Total Quantity: {totalQuantity}</p>
+        <p>Total Price: ${totalPrice.toFixed(2)}</p>
       </div>
     </div>
   );
