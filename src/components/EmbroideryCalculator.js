@@ -36,6 +36,7 @@ export default function EmbroideryCalculator() {
   const [loadingProduct, setLoadingProduct] = useState(false);
   const [error, setError] = useState(null);
   const [styles, setStyles] = useState([]);
+  const [filteredStyles, setFilteredStyles] = useState([]);
   const [colors, setColors] = useState({});
 
   const fetchStyles = useCallback(async () => {
@@ -43,6 +44,7 @@ export default function EmbroideryCalculator() {
       const response = await axios.get(`${API_BASE_URL}/styles`);
       if (response.data && response.data.length > 0) {
         setStyles(response.data);
+        setFilteredStyles(response.data);
         console.log('Fetched styles:', response.data);
       } else {
         throw new Error('No styles returned from the server');
@@ -119,6 +121,18 @@ export default function EmbroideryCalculator() {
     [fetchProductData]
   );
 
+  const filterStyles = useCallback((input) => {
+    const filtered = styles.filter(style => 
+      style.toLowerCase().includes(input.toLowerCase())
+    );
+    setFilteredStyles(filtered);
+  }, [styles]);
+
+  const debouncedFilterStyles = useMemo(
+    () => debounce(filterStyles, 300),
+    [filterStyles]
+  );
+
   const addNewLine = useCallback(() => {
     setOrders(prevOrders => [...prevOrders, {
       STYLE_No: "",
@@ -148,13 +162,14 @@ export default function EmbroideryCalculator() {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
         debouncedFetchProductData(value);
+        debouncedFilterStyles(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
       }
 
       return newOrders;
     });
-  }, [debouncedFetchProductData]);
+  }, [debouncedFetchProductData, debouncedFilterStyles]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     console.log(`Updating quantity: orderIndex=${orderIndex}, size=${size}, value=${value}`);
@@ -242,7 +257,7 @@ export default function EmbroideryCalculator() {
             list={`styles-${index}`}
           />
           <datalist id={`styles-${index}`}>
-            {styles.map(style => (
+            {filteredStyles.map(style => (
               <option key={style} value={style} />
             ))}
           </datalist>
@@ -295,7 +310,7 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
+  }, [orders, filteredStyles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
   if (loading) {
     return <LoadingSpinner />;
