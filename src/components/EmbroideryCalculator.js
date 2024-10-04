@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { FixedSizeList as List } from 'react-window';
+import debounce from 'lodash/debounce';
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
+
+const API_BASE_URL = '/api'; // This will be proxied to our server
 
 const getPriceForQuantity = (product, totalQuantity) => {
   if (!product) return 0;
@@ -37,13 +40,17 @@ export default function EmbroideryCalculator() {
 
   const fetchStyles = useCallback(async () => {
     try {
-      const response = await axios.get('/api/styles');
-      setStyles(response.data);
-      console.log('Fetched styles:', response.data);
-      setLoading(false);
+      const response = await axios.get(`${API_BASE_URL}/styles`);
+      if (response.data && response.data.length > 0) {
+        setStyles(response.data);
+        console.log('Fetched styles:', response.data);
+      } else {
+        throw new Error('No styles returned from the server');
+      }
     } catch (err) {
       console.error('Error fetching styles:', err);
       setError('Failed to load styles. Please try again later.');
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -53,13 +60,19 @@ export default function EmbroideryCalculator() {
   }, [fetchStyles]);
 
   const fetchProductData = useCallback(async (style) => {
+    if (!style) return;
     setLoadingProduct(true);
+    setError(null);
     try {
       console.log(`Fetching product data for style: ${style}`);
-      const response = await axios.get(`/api/products?style=${style}`);
-      const products = response.data.Result;
+      const response = await axios.get(`${API_BASE_URL}/products?style=${style}`);
+      const products = response.data;
       console.log(`Received ${products.length} products for style ${style}`);
       
+      if (products.length === 0) {
+        throw new Error(`No products found for style ${style}`);
+      }
+
       const formattedData = {};
       const colorsSet = new Set();
 
@@ -95,11 +108,16 @@ export default function EmbroideryCalculator() {
       });
     } catch (err) {
       console.error('Error fetching product data:', err);
-      setError('Failed to load product data. Please try again later.');
+      setError(`Failed to load product data for style ${style}. ${err.message}`);
     } finally {
       setLoadingProduct(false);
     }
   }, []);
+
+  const debouncedFetchProductData = useMemo(
+    () => debounce(fetchProductData, 300),
+    [fetchProductData]
+  );
 
   const addNewLine = useCallback(() => {
     setOrders(prevOrders => [...prevOrders, {
@@ -129,14 +147,14 @@ export default function EmbroideryCalculator() {
       if (field === 'STYLE_No') {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
-        fetchProductData(value);
+        debouncedFetchProductData(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
       }
 
       return newOrders;
     });
-  }, [fetchProductData]);
+  }, [debouncedFetchProductData]);
 
   const updateQuantity = useCallback((orderIndex, size, value) => {
     console.log(`Updating quantity: orderIndex=${orderIndex}, size=${size}, value=${value}`);
@@ -219,7 +237,6 @@ export default function EmbroideryCalculator() {
             type="text"
             value={order.STYLE_No}
             onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
-            onBlur={() => fetchProductData(order.STYLE_No)}
             className="w-full"
             placeholder="Enter style number"
             list={`styles-${index}`}
@@ -278,14 +295,10 @@ export default function EmbroideryCalculator() {
         </div>
       </div>
     );
-  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine, fetchProductData]);
+  }, [orders, styles, colors, productDatabase, updateOrder, renderSizeInput, calculateOrderTotals.quantity, removeLine]);
 
   if (loading) {
     return <LoadingSpinner />;
-  }
-
-  if (error) {
-    return <div className="text-red-500">{error}</div>;
   }
 
   return (
@@ -293,6 +306,7 @@ export default function EmbroideryCalculator() {
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Order Form</h1>
       <p className="mb-4">Number of styles available: {styles.length}</p>
       {loadingProduct && <p className="mb-4 text-blue-600">Loading product data...</p>}
+      {error && <p className="mb-4 text-red-500">{error}</p>}
       <div className="mb-4 bg-white">
         <div className="flex bg-green-600 text-white">
           <div className="flex-1 p-2">Style No</div>
