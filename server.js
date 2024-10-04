@@ -150,5 +150,6 @@ function start() {
 
 throng({
   workers: WORKERS,
-  lifetime: Infinity
-}, start);
+  lifetime: Infinity,
+  start: start
+});
