@@ -29,6 +29,7 @@ export default function EmbroideryCalculator() {
     error: null
   }]);
   const [loading, setLoading] = useState(true);
+  const [loadingProduct, setLoadingProduct] = useState(false);
   const [error, setError] = useState(null);
   const [styles, setStyles] = useState([]);
   const [colors, setColors] = useState({});
@@ -50,9 +51,12 @@ export default function EmbroideryCalculator() {
   }, [fetchStyles]);
 
   const fetchProductData = useCallback(async (style) => {
+    setLoadingProduct(true);
     try {
+      console.log(`Fetching product data for style: ${style}`);
       const response = await axios.get(`/api/products?style=${style}`);
       const products = response.data.Result;
+      console.log(`Received ${products.length} products for style ${style}`);
       
       const formattedData = {};
       const colorsSet = new Set();
@@ -73,14 +77,26 @@ export default function EmbroideryCalculator() {
         colorsSet.add(product.COLOR_NAME);
       });
 
-      setProductDatabase(prevData => ({ ...prevData, ...formattedData }));
-      setColors(prevColors => ({
-        ...prevColors,
-        [style]: Array.from(colorsSet)
-      }));
+      console.log(`Formatted data for style ${style}:`, formattedData);
+
+      setProductDatabase(prevData => {
+        const newData = { ...prevData, ...formattedData };
+        console.log('Updated product database:', newData);
+        return newData;
+      });
+      setColors(prevColors => {
+        const newColors = {
+          ...prevColors,
+          [style]: Array.from(colorsSet)
+        };
+        console.log('Updated colors:', newColors);
+        return newColors;
+      });
     } catch (err) {
       console.error('Error fetching product data:', err);
       setError('Failed to load product data. Please try again later.');
+    } finally {
+      setLoadingProduct(false);
     }
   }, []);
 
@@ -172,8 +188,22 @@ export default function EmbroideryCalculator() {
   const renderSizeInput = useCallback((order, size, totalQuantity, orderIndex) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
-    const basePrice = product ? getPriceForQuantity(product, totalQuantity) : 0;
-    const sizeProduct = product?.sizes[size];
+    if (!product) {
+      return (
+        <div className={`p-1 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+          <input
+            type="number"
+            value={order.quantities[size] || ''}
+            onChange={(e) => updateQuantity(orderIndex, size, e.target.value)}
+            className="w-full mb-1 text-sm"
+            min="0"
+          />
+          <div className="text-xs text-gray-500">Loading...</div>
+        </div>
+      );
+    }
+    const basePrice = getPriceForQuantity(product, totalQuantity);
+    const sizeProduct = product.sizes[size];
     const surcharge = sizeProduct && sizeProduct.Surcharge ? parseFloat(sizeProduct.Surcharge) || 0 : 0;
     const price = basePrice + surcharge;
 
@@ -273,6 +303,7 @@ export default function EmbroideryCalculator() {
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Order Form</h1>
       <p className="mb-4">Number of styles available: {styles.length}</p>
+      {loadingProduct && <p className="mb-4 text-blue-600">Loading product data...</p>}
       <div className="mb-4 bg-white">
         <div className="flex bg-green-600 text-white">
           <div className="flex-1 p-2">Style No</div>
