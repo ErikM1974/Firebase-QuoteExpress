@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
 
-const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2';
+const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2/views/Heroku/records';
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 const LARGE_SIZES = ['2XL', '3XL', '4XL'];
 
@@ -50,12 +50,12 @@ export default function EmbroideryCalculator() {
   const refreshToken = useCallback(async () => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/oauth/token`,
+        'https://c3eku948.caspio.com/oauth/token',
         new URLSearchParams({
           grant_type: 'client_credentials',
           client_id: process.env.REACT_APP_CASPIO_CLIENT_ID,
           client_secret: process.env.REACT_APP_CASPIO_CLIENT_SECRET,
-        }),
+        }).toString(),
         {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -90,10 +90,9 @@ export default function EmbroideryCalculator() {
   const fetchStyles = useCallback(async () => {
     try {
       const accessToken = await getAccessToken();
-      const viewName = 'EmbroideryProducts'; // Replace with your view name
 
       const response = await axios.get(
-        `${API_BASE_URL}/views/${viewName}/records?q.select=STYLE_No&q.distinct=true`,
+        `${API_BASE_URL}?q.select=STYLE_No&q.distinct=true`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -126,10 +125,9 @@ export default function EmbroideryCalculator() {
   const fetchProductDetails = useCallback(async (styleNo) => {
     try {
       const accessToken = await getAccessToken();
-      const viewName = 'EmbroideryProducts'; // Replace with your view name
 
       const response = await axios.get(
-        `${API_BASE_URL}/views/${viewName}/records?q={"STYLE_No":"${styleNo}"}`,
+        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
