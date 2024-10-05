@@ -65,7 +65,12 @@ const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
   }
 
   try {
-    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records?q={"STYLE_No":{"like":"${styleSearch}"}}`, {
+    const url = `${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`;
+    const params = styleSearch 
+      ? `?q={"STYLE_No":{"like":"${styleSearch}"}}&s={"STYLE_No":1}&distinct=true`
+      : '?s={"STYLE_No":1}&distinct=true';
+
+    const response = await axios.get(url + params, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -76,6 +81,34 @@ const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
     if (error.response && error.response.status === 401 && retryCount < 3) {
       const { newAccessToken } = await refreshToken();
       return fetchSanmarPricingData(styleSearch, retryCount + 1);
+    }
+    throw error;
+  }
+};
+
+const fetchFullProductDetails = async (selectedStyle, retryCount = 0) => {
+  let accessToken = localStorage.getItem('caspioAccessToken');
+
+  if (!accessToken) {
+    const { newAccessToken } = await refreshToken();
+    accessToken = newAccessToken;
+  }
+
+  try {
+    const url = `${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`;
+    const params = `?q={"STYLE_No":"${selectedStyle}"}`;
+
+    const response = await axios.get(url + params, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 401 && retryCount < 3) {
+      const { newAccessToken } = await refreshToken();
+      return fetchFullProductDetails(selectedStyle, retryCount + 1);
     }
     throw error;
   }
@@ -96,8 +129,7 @@ export default function EmbroideryCalculator() {
     debounce(async (styleSearch) => {
       try {
         const data = await fetchSanmarPricingData(styleSearch);
-        setStyles([...new Set(data.Result.map(p => p.STYLE_No))]);
-        setAllProducts(data.Result);
+        setStyles(data.Result.map(item => item.STYLE_No));
         setError(null);
       } catch (error) {
         console.error('Error fetching styles:', error);
@@ -113,6 +145,23 @@ export default function EmbroideryCalculator() {
     setSelectedStyle(searchValue);
     setLoading(true);
     debouncedFetchStyles(searchValue);
+  };
+
+  const handleStyleSelect = async (style) => {
+    setSelectedStyle(style);
+    setLoading(true);
+    try {
+      const data = await fetchFullProductDetails(style);
+      setAllProducts(data.Result);
+      const uniqueColors = [...new Set(data.Result.map(p => p.COLOR_NAME))];
+      setColors(uniqueColors);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      setError('Failed to fetch product details.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -140,15 +189,13 @@ export default function EmbroideryCalculator() {
 
   useEffect(() => {
     if (selectedStyle) {
-      const styleProducts = allProducts.filter(p => p.STYLE_No === selectedStyle);
-      const uniqueColors = [...new Set(styleProducts.map(p => p.COLOR_NAME))];
-      setColors(uniqueColors);
+      handleStyleSelect(selectedStyle);
     } else {
       setColors([]);
+      setSelectedColor('');
+      setQuantities({});
     }
-    setSelectedColor('');
-    setQuantities({});
-  }, [selectedStyle, allProducts]);
+  }, [selectedStyle]);
 
   const getPriceForQuantity = (product, totalQuantity) => {
     if (!product) return 0;
@@ -203,6 +250,7 @@ export default function EmbroideryCalculator() {
           type="text"
           value={selectedStyle}
           onChange={handleStyleInputChange}
+          onBlur={() => handleStyleSelect(selectedStyle)}
           placeholder="Search for a style"
           list="styleOptions"
         />
