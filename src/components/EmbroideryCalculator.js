@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
 
@@ -39,7 +39,6 @@ export default function EmbroideryCalculator() {
     },
   ]);
   const [styles, setStyles] = useState([]);
-  const [filteredStyles, setFilteredStyles] = useState([]);
   const [colors, setColors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -105,7 +104,6 @@ export default function EmbroideryCalculator() {
           .map(item => item.STYLE_No)
           .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
         setStyles(styleNumbers);
-        setFilteredStyles(styleNumbers);
       } else {
         throw new Error('No styles returned from the server');
       }
@@ -232,6 +230,103 @@ export default function EmbroideryCalculator() {
     [orders, productDatabase, fetchProductDetails]
   );
 
+  // Update quantity for a size
+  const updateQuantity = (orderIndex, size, value) => {
+    const newOrders = [...orders];
+    const newQuantities = {
+      ...newOrders[orderIndex].quantities,
+      [size]: parseInt(value) || 0,
+    };
+    newOrders[orderIndex].quantities = newQuantities;
+    setOrders(newOrders);
+  };
+
+  // Get available sizes for the selected product
+  const getAvailableSizes = (order) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return STANDARD_SIZES;
+
+    const availableSizes = Object.keys(product.sizes);
+    if (availableSizes.includes('OSFA')) {
+      return ['OSFA'];
+    }
+    return availableSizes.sort(
+      (a, b) => STANDARD_SIZES.indexOf(a) - STANDARD_SIZES.indexOf(b)
+    );
+  };
+
+  // Get price based on total quantity
+  const getPriceForQuantity = (product, totalQuantity) => {
+    if (!product) return 0;
+    if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
+    if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
+    if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
+    if (totalQuantity >= 12) return parseFloat(product.Price_12_23) || 0;
+    if (totalQuantity >= 6) return parseFloat(product.Price_6_11) || 0;
+    return parseFloat(product.Price_2_5) || 0;
+  };
+
+  // Calculate totals
+  const totals = useMemo(() => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return (
+        acc +
+        Object.values(order.quantities).reduce(
+          (sum, qty) => sum + (qty || 0),
+          0
+        )
+      );
+    }, 0);
+
+    const totalPrice = orders.reduce((acc, order) => {
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+      const product = productDatabase[key];
+      if (!product) return acc;
+
+      const orderQuantity = Object.values(order.quantities).reduce(
+        (sum, qty) => sum + (qty || 0),
+        0
+      );
+      const basePrice = getPriceForQuantity(product, totalQuantity);
+
+      const orderPrice = Object.entries(order.quantities).reduce(
+        (sum, [size, qty]) => {
+          if (!qty) return sum;
+          const sizeProduct = product.sizes[size];
+          const surcharge =
+            sizeProduct && sizeProduct.Surcharge
+              ? parseFloat(sizeProduct.Surcharge) || 0
+              : 0;
+          return sum + (basePrice + surcharge) * qty;
+        },
+        0
+      );
+
+      return acc + orderPrice;
+    }, 0);
+
+    return { quantity: totalQuantity, price: totalPrice };
+  }, [orders, productDatabase]);
+
+  // Calculate row total for an order
+  const calculateRowTotal = (order, totalQuantity) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return 0;
+
+    const basePrice = getPriceForQuantity(product, totalQuantity);
+    return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+      if (!qty) return sum;
+      const sizeProduct = product.sizes[size];
+      const surcharge =
+        sizeProduct && sizeProduct.Surcharge
+          ? parseFloat(sizeProduct.Surcharge) || 0
+          : 0;
+      return sum + (basePrice + surcharge) * qty;
+    }, 0);
+  };
+
   const addNewLine = () => {
     setOrders(prevOrders => [
       ...prevOrders,
@@ -281,43 +376,146 @@ export default function EmbroideryCalculator() {
         Embroidery Order Form
       </h1>
       <p className="mb-4">Number of styles available: {styles.length}</p>
-      <div className="mb-4">
-        {orders.map((order, index) => (
-          <div key={index} className="flex items-center mb-2">
-            <AutocompleteInput
-              type="text"
-              value={order.STYLE_No}
-              onChange={(e) => updateOrder(index, 'STYLE_No', e.target.value)}
-              placeholder="Enter style number"
-              list={`styles-list-${index}`}
-            />
-            <datalist id={`styles-list-${index}`}>
-              {filteredStyles.map(style => (
-                <option key={style} value={style} />
-              ))}
-            </datalist>
-            <select
-              value={order.COLOR_NAME}
-              onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
-              className="ml-2 p-2 border rounded"
-              disabled={!order.STYLE_No}
-            >
-              <option value="">Select Color</option>
-              {colors[order.STYLE_No]?.map((color) => (
-                <option key={color} value={color}>
-                  {color}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => removeLine(index)}
-              className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
+      <table className="w-full border-collapse border border-gray-300 mb-4 bg-white">
+        <thead>
+          <tr className="bg-green-600 text-white">
+            <th className="border border-gray-300 p-2">Style No</th>
+            <th className="border border-gray-300 p-2">Color Name</th>
+            <th className="border border-gray-300 p-2">Product Title</th>
+            <th className="border border-gray-300 p-2">Sizes</th>
+            <th className="border border-gray-300 p-2">Row Total</th>
+            <th className="border border-gray-300 p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order, index) => {
+            const availableSizes = getAvailableSizes(order);
+            const totalQuantity = totals.quantity;
+            return (
+              <tr key={index}>
+                <td className="border border-gray-300 p-2">
+                  <label htmlFor={`style-${index}`} className="sr-only">
+                    Style Number
+                  </label>
+                  <AutocompleteInput
+                    id={`style-${index}`}
+                    list={`styles-${index}`}
+                    value={order.STYLE_No}
+                    onChange={(e) =>
+                      updateOrder(index, 'STYLE_No', e.target.value)
+                    }
+                    placeholder="Enter or select style"
+                  />
+                  <datalist id={`styles-${index}`}>
+                    {styles.map((style) => (
+                      <option key={style} value={style} />
+                    ))}
+                  </datalist>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <label htmlFor={`color-${index}`} className="sr-only">
+                    Color Name
+                  </label>
+                  <select
+                    id={`color-${index}`}
+                    value={order.COLOR_NAME}
+                    onChange={(e) =>
+                      updateOrder(index, 'COLOR_NAME', e.target.value)
+                    }
+                    className="w-full p-2 border rounded"
+                    disabled={!order.STYLE_No}
+                  >
+                    <option value="">Select Color</option>
+                    {colors[order.STYLE_No]?.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  {
+                    productDatabase[
+                      `${order.STYLE_No}-${order.COLOR_NAME}`
+                    ]?.PRODUCT_TITLE || ''
+                  }
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <div className="flex flex-wrap">
+                    {availableSizes.map((size) => {
+                      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+                      const product = productDatabase[key];
+                      const basePrice = product
+                        ? getPriceForQuantity(product, totalQuantity)
+                        : 0;
+                      const sizeProduct = product?.sizes[size];
+                      const surcharge =
+                        sizeProduct && sizeProduct.Surcharge
+                          ? parseFloat(sizeProduct.Surcharge) || 0
+                          : 0;
+                      const price = basePrice + surcharge;
+
+                      return (
+                        <div
+                          key={size}
+                          className={`w-1/4 p-1 ${
+                            LARGE_SIZES.includes(size) ? 'bg-green-100' : ''
+                          }`}
+                        >
+                          <label
+                            htmlFor={`qty-${index}-${size}`}
+                            className="text-xs font-bold mb-1 block"
+                          >
+                            {size}
+                          </label>
+                          <input
+                            id={`qty-${index}-${size}`}
+                            type="number"
+                            value={order.quantities[size] || ''}
+                            onChange={(e) =>
+                              updateQuantity(index, size, e.target.value)
+                            }
+                            className="w-full mb-1 text-sm p-1 border rounded"
+                            min="0"
+                            aria-label={`Quantity for size ${size}`}
+                          />
+                          <div className="text-xs text-gray-500">
+                            ${price.toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </td>
+                <td className="border border-gray-300 p-2 font-bold">
+                  ${calculateRowTotal(order, totalQuantity).toFixed(2)}
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <button
+                    onClick={() => removeLine(index)}
+                    className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                    aria-label="Remove line"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {orders.some((order) => order.error) && (
+        <div className="text-red-500 mb-4">
+          {orders.map(
+            (order, index) =>
+              order.error && (
+                <div key={index}>
+                  Line {index + 1}: {order.error}
+                </div>
+              )
+          )}
+        </div>
+      )}
       <div className="mb-4">
         <button
           onClick={addNewLine}
@@ -331,6 +529,12 @@ export default function EmbroideryCalculator() {
         >
           Submit Order
         </button>
+      </div>
+      <div className="text-xl font-bold text-gray-700">
+        Total Quantity: {totals.quantity}
+      </div>
+      <div className="text-xl font-bold text-gray-700">
+        Total Price: ${totals.price.toFixed(2)}
       </div>
     </div>
   );
