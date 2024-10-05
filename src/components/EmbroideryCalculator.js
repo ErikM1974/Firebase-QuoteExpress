@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
+import debounce from 'lodash.debounce';
 
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
@@ -20,6 +21,13 @@ const Spinner = styled.div`
   }
 `;
 
+const AutocompleteInput = styled.input`
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+`;
+
 const refreshToken = async () => {
   try {
     const response = await axios.post('https://c3eku948.caspio.com/oauth/token', 
@@ -37,7 +45,7 @@ const refreshToken = async () => {
     );
 
     const newAccessToken = response.data.access_token;
-    const expiresIn = response.data.expires_in || 3600; // Default to 1 hour if not provided
+    const expiresIn = response.data.expires_in || 3600;
     
     localStorage.setItem('caspioAccessToken', newAccessToken);
 
@@ -48,7 +56,7 @@ const refreshToken = async () => {
   }
 };
 
-const fetchSanmarPricingData = async (retryCount = 0) => {
+const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
   let accessToken = localStorage.getItem('caspioAccessToken');
 
   if (!accessToken) {
@@ -57,17 +65,17 @@ const fetchSanmarPricingData = async (retryCount = 0) => {
   }
 
   try {
-    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`, {
+    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records?q={"STYLE_No":{"like":"${styleSearch}"}}`, {
       headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
 
     return response.data;
   } catch (error) {
     if (error.response && error.response.status === 401 && retryCount < 3) {
       const { newAccessToken } = await refreshToken();
-      return fetchSanmarPricingData(retryCount + 1);
+      return fetchSanmarPricingData(styleSearch, retryCount + 1);
     }
     throw error;
   }
@@ -84,36 +92,38 @@ export default function EmbroideryCalculator() {
   const [error, setError] = useState(null);
   const timeoutRef = useRef(null);
 
-  const fetchData = async () => {
-    try {
-      const data = await fetchSanmarPricingData();
-      setAllProducts(data.Result);
-      const uniqueStyles = [...new Set(data.Result.map(p => p.STYLE_No))];
-      setStyles(uniqueStyles);
-      setError(null);
-    } catch (err) {
-      if (!err.response) {
-        setError('Network error, please check your connection.');
-      } else if (err.response.status === 401) {
-        setError('Unauthorized access. Please refresh or login again.');
-      } else {
-        setError('Failed to load product data. Please try again later.');
+  const debouncedFetchStyles = useRef(
+    debounce(async (styleSearch) => {
+      try {
+        const data = await fetchSanmarPricingData(styleSearch);
+        setStyles([...new Set(data.Result.map(p => p.STYLE_No))]);
+        setAllProducts(data.Result);
+        setError(null);
+      } catch (error) {
+        console.error('Error fetching styles:', error);
+        setError('Failed to fetch styles.');
+      } finally {
+        setLoading(false);
       }
-      console.error('API Error:', err);
-    } finally {
-      setLoading(false);
-    }
+    }, 300)
+  ).current;
+
+  const handleStyleInputChange = (e) => {
+    const searchValue = e.target.value;
+    setSelectedStyle(searchValue);
+    setLoading(true);
+    debouncedFetchStyles(searchValue);
   };
 
   useEffect(() => {
-    fetchData();
+    debouncedFetchStyles('');
 
     const setupTokenRefresh = async () => {
       try {
         const { expiresIn } = await refreshToken();
         timeoutRef.current = setTimeout(() => {
           refreshToken().catch(console.error);
-        }, (expiresIn - 60) * 1000); // Refresh 1 minute before token expires
+        }, (expiresIn - 60) * 1000);
       } catch (error) {
         console.error('Error setting up token refresh:', error);
       }
@@ -176,7 +186,7 @@ export default function EmbroideryCalculator() {
     return (
       <div className="text-red-500">
         {error}
-        <button onClick={fetchData} className="ml-2 p-2 bg-blue-500 text-white rounded">
+        <button onClick={() => debouncedFetchStyles('')} className="ml-2 p-2 bg-blue-500 text-white rounded">
           Retry
         </button>
       </div>
@@ -186,19 +196,25 @@ export default function EmbroideryCalculator() {
   return (
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
+
       <div className="mb-4">
         <label className="block mb-2">Style Number:</label>
-        <select 
-          value={selectedStyle} 
-          onChange={(e) => setSelectedStyle(e.target.value)}
-          className="w-full p-2 border rounded"
-        >
-          <option value="">Select a style</option>
-          {styles.map(style => (
-            <option key={style} value={style}>{style}</option>
+        <AutocompleteInput
+          type="text"
+          value={selectedStyle}
+          onChange={handleStyleInputChange}
+          placeholder="Search for a style"
+          list="styleOptions"
+        />
+        <datalist id="styleOptions">
+          {styles.map((style) => (
+            <option key={style} value={style}>
+              {style}
+            </option>
           ))}
-        </select>
+        </datalist>
       </div>
+
       {selectedStyle && (
         <div className="mb-4">
           <label className="block mb-2">Color:</label>
