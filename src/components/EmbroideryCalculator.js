@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
 
-const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
 
 const Spinner = styled.div`
@@ -57,7 +57,7 @@ const fetchSanmarPricingData = async (retryCount = 0) => {
   }
 
   try {
-    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`, {
+    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`, {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
@@ -128,7 +128,45 @@ export default function EmbroideryCalculator() {
     };
   }, []);
 
-  // ... (rest of the component logic remains the same)
+  useEffect(() => {
+    if (selectedStyle) {
+      const styleProducts = allProducts.filter(p => p.STYLE_No === selectedStyle);
+      const uniqueColors = [...new Set(styleProducts.map(p => p.COLOR_NAME))];
+      setColors(uniqueColors);
+    } else {
+      setColors([]);
+    }
+    setSelectedColor('');
+    setQuantities({});
+  }, [selectedStyle, allProducts]);
+
+  const getPriceForQuantity = (product, totalQuantity) => {
+    if (!product) return 0;
+    if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
+    if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
+    if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
+    if (totalQuantity >= 12) return parseFloat(product.Price_12_23) || 0;
+    if (totalQuantity >= 6) return parseFloat(product.Price_6_11) || 0;
+    return parseFloat(product.Price_2_5) || 0;
+  };
+
+  const totalQuantity = useMemo(() => 
+    Object.values(quantities).reduce((sum, qty) => sum + qty, 0),
+    [quantities]
+  );
+
+  const totalPrice = useMemo(() => {
+    if (!selectedStyle || !selectedColor) return 0;
+    const products = allProducts.filter(p => p.STYLE_No === selectedStyle && p.COLOR_NAME === selectedColor);
+    if (products.length === 0) return 0;
+    return Object.entries(quantities).reduce((sum, [size, qty]) => {
+      const sizeProduct = products.find(p => p.SIZE === size);
+      if (!sizeProduct) return sum;
+      const basePrice = getPriceForQuantity(sizeProduct, totalQuantity);
+      const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
+      return sum + (basePrice + surcharge) * qty;
+    }, 0);
+  }, [allProducts, selectedStyle, selectedColor, quantities, totalQuantity]);
 
   if (loading) {
     return <Spinner />;
@@ -148,13 +186,58 @@ export default function EmbroideryCalculator() {
   return (
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
-      {/* ... (rest of the JSX remains the same) */}
+      <div className="mb-4">
+        <label className="block mb-2">Style Number:</label>
+        <select 
+          value={selectedStyle} 
+          onChange={(e) => setSelectedStyle(e.target.value)}
+          className="w-full p-2 border rounded"
+        >
+          <option value="">Select a style</option>
+          {styles.map(style => (
+            <option key={style} value={style}>{style}</option>
+          ))}
+        </select>
+      </div>
+      {selectedStyle && (
+        <div className="mb-4">
+          <label className="block mb-2">Color:</label>
+          <select 
+            value={selectedColor} 
+            onChange={(e) => setSelectedColor(e.target.value)}
+            className="w-full p-2 border rounded"
+          >
+            <option value="">Select a color</option>
+            {colors.map(color => (
+              <option key={color} value={color}>{color}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {selectedColor && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mb-2">Quantities:</h2>
+          <div className="grid grid-cols-3 gap-4">
+            {STANDARD_SIZES.map(size => (
+              <div key={size} className={`p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
+                <label className="block mb-1">{size}:</label>
+                <input
+                  type="number"
+                  value={quantities[size] || ''}
+                  onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})}
+                  className="w-full p-1 border rounded"
+                  min="0"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="mt-4">
+        <h2 className="text-xl font-bold">Order Summary:</h2>
+        <p>Total Quantity: {totalQuantity}</p>
+        <p>Total Price: ${totalPrice.toFixed(2)}</p>
+      </div>
     </div>
   );
-}
-
-// Helper function to calculate total price (implement this based on your pricing logic)
-function calculateTotalPrice() {
-  // Implement your pricing calculation logic here
-  return 0; // Placeholder return value
 }
