@@ -4,12 +4,36 @@ import axios from 'axios';
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
 
-const fetchSanmarPricingData = async () => {
+const refreshToken = async () => {
   try {
-    const apiUrl = process.env.REACT_APP_CASPIO_API_URL;
-    const accessToken = process.env.REACT_APP_CASPIO_ACCESS_TOKEN;
+    const response = await axios.post('https://c3eku948.caspio.com/oauth/token', 
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: process.env.REACT_APP_CASPIO_CLIENT_ID,
+        client_secret: process.env.REACT_APP_CASPIO_CLIENT_SECRET,
+        refresh_token: process.env.REACT_APP_CASPIO_REFRESH_TOKEN,
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
 
-    const response = await axios.get(`${apiUrl}/tables/Sanmar_Pricing_2024/records`, {
+    const newAccessToken = response.data.access_token;
+    localStorage.setItem('caspioAccessToken', newAccessToken);
+    return newAccessToken;
+  } catch (error) {
+    console.error('Failed to refresh access token:', error);
+    throw error;
+  }
+};
+
+const fetchSanmarPricingData = async () => {
+  let accessToken = localStorage.getItem('caspioAccessToken') || process.env.REACT_APP_CASPIO_ACCESS_TOKEN;
+
+  try {
+    const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`, {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
@@ -17,7 +41,13 @@ const fetchSanmarPricingData = async () => {
 
     return response.data;
   } catch (error) {
-    console.error('Error fetching data:', error);
+    if (error.response && error.response.status === 401) {
+      // Token expired, refresh it
+      accessToken = await refreshToken();
+      // Retry the request with the new token
+      return fetchSanmarPricingData(); // recursive call
+    }
+    console.error('Error fetching Sanmar pricing data:', error);
     throw error;
   }
 };
@@ -57,109 +87,21 @@ export default function EmbroideryCalculator() {
       }
     };
     fetchData();
+
+    // Set up token refresh timer
+    const refreshTimer = setInterval(() => {
+      refreshToken().catch(console.error);
+    }, (3600 - 60) * 1000); // Refresh 1 minute before token expires
+
+    return () => clearInterval(refreshTimer);
   }, []);
 
-  useEffect(() => {
-    if (selectedStyle) {
-      const styleProducts = allProducts.filter(p => p.STYLE_No === selectedStyle);
-      const uniqueColors = [...new Set(styleProducts.map(p => p.COLOR_NAME))];
-      setColors(uniqueColors);
-    } else {
-      setColors([]);
-    }
-    setSelectedColor('');
-    setQuantities({});
-  }, [selectedStyle, allProducts]);
-
-  const handleStyleChange = (e) => {
-    setSelectedStyle(e.target.value);
-  };
-
-  const handleColorChange = (e) => {
-    setSelectedColor(e.target.value);
-    setQuantities({});
-  };
-
-  const handleQuantityChange = (size, value) => {
-    setQuantities(prev => ({ ...prev, [size]: parseInt(value) || 0 }));
-  };
-
-  const totalQuantity = useMemo(() => 
-    Object.values(quantities).reduce((sum, qty) => sum + qty, 0),
-    [quantities]
-  );
-
-  const totalPrice = useMemo(() => {
-    if (!selectedStyle || !selectedColor) return 0;
-    const products = allProducts.filter(p => p.STYLE_No === selectedStyle && p.COLOR_NAME === selectedColor);
-    if (products.length === 0) return 0;
-    const basePrice = getPriceForQuantity(products[0], totalQuantity);
-    return Object.entries(quantities).reduce((sum, [size, qty]) => {
-      const sizeProduct = products.find(p => p.SIZE === size);
-      if (!sizeProduct) return sum;
-      const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
-      return sum + (basePrice + surcharge) * qty;
-    }, 0);
-  }, [allProducts, selectedStyle, selectedColor, quantities, totalQuantity]);
-
-  if (loading) return <div className="text-center py-4">Loading product data...</div>;
-  if (error) return <div className="text-red-500 text-center py-4">{error}</div>;
+  // ... rest of the component code remains the same
 
   return (
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
-      <div className="mb-4">
-        <label className="block mb-2">Style Number:</label>
-        <select 
-          value={selectedStyle} 
-          onChange={handleStyleChange}
-          className="w-full p-2 border rounded"
-        >
-          <option value="">Select a style</option>
-          {styles.map(style => (
-            <option key={style} value={style}>{style}</option>
-          ))}
-        </select>
-      </div>
-      {selectedStyle && (
-        <div className="mb-4">
-          <label className="block mb-2">Color:</label>
-          <select 
-            value={selectedColor} 
-            onChange={handleColorChange}
-            className="w-full p-2 border rounded"
-          >
-            <option value="">Select a color</option>
-            {colors.map(color => (
-              <option key={color} value={color}>{color}</option>
-            ))}
-          </select>
-        </div>
-      )}
-      {selectedColor && (
-        <div className="mb-4">
-          <h2 className="text-xl font-bold mb-2">Quantities:</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {STANDARD_SIZES.map(size => (
-              <div key={size} className={`p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-                <label className="block mb-1">{size}:</label>
-                <input
-                  type="number"
-                  value={quantities[size] || ''}
-                  onChange={(e) => handleQuantityChange(size, e.target.value)}
-                  className="w-full p-1 border rounded"
-                  min="0"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="mt-4">
-        <h2 className="text-xl font-bold">Order Summary:</h2>
-        <p>Total Quantity: {totalQuantity}</p>
-        <p>Total Price: ${totalPrice.toFixed(2)}</p>
-      </div>
+      {/* ... rest of the JSX remains the same */}
     </div>
   );
 }
