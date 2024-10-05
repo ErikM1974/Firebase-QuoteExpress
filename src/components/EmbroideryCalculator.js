@@ -3,8 +3,8 @@ import axios from 'axios';
 import styled from 'styled-components';
 
 const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2/views/Heroku/records';
-const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
-const LARGE_SIZES = ['2XL', '3XL', '4XL'];
+const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+const LARGE_SIZES = ['2XL', '3XL'];
 
 const Spinner = styled.div`
   border: 16px solid #f3f3f3;
@@ -85,7 +85,7 @@ export default function EmbroideryCalculator() {
     return accessToken;
   }, [refreshToken]);
 
-  // Fetch styles
+  // Fetch all styles
   const fetchStyles = useCallback(async () => {
     try {
       const accessToken = await getAccessToken();
@@ -274,12 +274,14 @@ export default function EmbroideryCalculator() {
     if (!product) return STANDARD_SIZES;
 
     const availableSizes = Object.keys(product.sizes);
-    if (availableSizes.includes('OSFA')) {
-      return ['OSFA'];
-    }
-    return availableSizes.sort(
-      (a, b) => STANDARD_SIZES.indexOf(a) - STANDARD_SIZES.indexOf(b)
-    );
+    return availableSizes.sort((a, b) => {
+      const aIndex = STANDARD_SIZES.indexOf(a);
+      const bIndex = STANDARD_SIZES.indexOf(b);
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
   };
 
   // Get price based on total quantity
@@ -408,7 +410,10 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Style No</th>
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
-            <th className="border border-gray-300 p-2">Sizes</th>
+            {STANDARD_SIZES.map(size => (
+              <th key={size} className="border border-gray-300 p-2">{size}</th>
+            ))}
+            <th className="border border-gray-300 p-2">Other Sizes</th>
             <th className="border border-gray-300 p-2">Row Total</th>
             <th className="border border-gray-300 p-2">Actions</th>
           </tr>
@@ -466,52 +471,45 @@ export default function EmbroideryCalculator() {
                     ]?.PRODUCT_TITLE || ''
                   }
                 </td>
+                {STANDARD_SIZES.map(size => (
+                  <td key={size} className="border border-gray-300 p-2">
+                    <input
+                      type="number"
+                      value={order.quantities[size] || ''}
+                      onChange={(e) =>
+                        updateQuantity(index, size, e.target.value)
+                      }
+                      className="w-full p-1 border rounded"
+                      min="0"
+                      disabled={!availableSizes.includes(size)}
+                    />
+                    {availableSizes.includes(size) && (
+                      <div className="text-xs text-gray-500">
+                        ${(getPriceForQuantity(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size], totalQuantity) + 
+                           (LARGE_SIZES.includes(size) ? parseFloat(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size]?.Surcharge || 0) : 0)).toFixed(2)}
+                      </div>
+                    )}
+                  </td>
+                ))}
                 <td className="border border-gray-300 p-2">
-                  <div className="flex flex-wrap">
-                    {availableSizes.map((size) => {
-                      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-                      const product = productDatabase[key];
-                      const basePrice = product
-                        ? getPriceForQuantity(product.sizes[size], totalQuantity)
-                        : 0;
-                      const sizeProduct = product?.sizes[size];
-                      const surcharge =
-                        sizeProduct && sizeProduct.Surcharge
-                          ? parseFloat(sizeProduct.Surcharge) || 0
-                          : 0;
-                      const price = basePrice + surcharge;
-
-                      return (
-                        <div
-                          key={size}
-                          className={`w-1/4 p-1 ${
-                            LARGE_SIZES.includes(size) ? 'bg-green-100' : ''
-                          }`}
-                        >
-                          <label
-                            htmlFor={`qty-${index}-${size}`}
-                            className="text-xs font-bold mb-1 block"
-                          >
-                            {size}
-                          </label>
-                          <input
-                            id={`qty-${index}-${size}`}
-                            type="number"
-                            value={order.quantities[size] || ''}
-                            onChange={(e) =>
-                              updateQuantity(index, size, e.target.value)
-                            }
-                            className="w-full mb-1 text-sm p-1 border rounded"
-                            min="0"
-                            aria-label={`Quantity for size ${size}`}
-                          />
-                          <div className="text-xs text-gray-500">
-                            ${price.toFixed(2)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {availableSizes.filter(size => !STANDARD_SIZES.includes(size)).map(size => (
+                    <div key={size} className="mb-2">
+                      <label className="text-xs font-bold">{size}:</label>
+                      <input
+                        type="number"
+                        value={order.quantities[size] || ''}
+                        onChange={(e) =>
+                          updateQuantity(index, size, e.target.value)
+                        }
+                        className="w-full p-1 border rounded"
+                        min="0"
+                      />
+                      <div className="text-xs text-gray-500">
+                        ${(getPriceForQuantity(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size], totalQuantity) + 
+                           parseFloat(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size]?.Surcharge || 0)).toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
                 </td>
                 <td className="border border-gray-300 p-2 font-bold">
                   ${calculateRowTotal(order, totalQuantity).toFixed(2)}
