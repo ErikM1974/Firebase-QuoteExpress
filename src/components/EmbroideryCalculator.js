@@ -1,8 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
+import styled from 'styled-components';
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 const LARGE_SIZES = ['2XL', '3XL'];
+
+const Spinner = styled.div`
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid #3498db;
+  width: 120px;
+  height: 120px;
+  animation: spin 2s linear infinite;
+  margin: 20px auto;
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
 
 const refreshToken = async () => {
   try {
@@ -21,16 +37,24 @@ const refreshToken = async () => {
     );
 
     const newAccessToken = response.data.access_token;
+    const expiresIn = response.data.expires_in || 3600; // Default to 1 hour if not provided
+    
     localStorage.setItem('caspioAccessToken', newAccessToken);
-    return newAccessToken;
+
+    return { newAccessToken, expiresIn };
   } catch (error) {
     console.error('Failed to refresh access token:', error);
     throw error;
   }
 };
 
-const fetchSanmarPricingData = async () => {
-  let accessToken = localStorage.getItem('caspioAccessToken') || process.env.REACT_APP_CASPIO_ACCESS_TOKEN;
+const fetchSanmarPricingData = async (retryCount = 0) => {
+  let accessToken = localStorage.getItem('caspioAccessToken');
+
+  if (!accessToken) {
+    const { newAccessToken } = await refreshToken();
+    accessToken = newAccessToken;
+  }
 
   try {
     const response = await axios.get(`${process.env.REACT_APP_CASPIO_API_URL}/tables/Sanmar_Pricing_2024/records`, {
@@ -41,25 +65,12 @@ const fetchSanmarPricingData = async () => {
 
     return response.data;
   } catch (error) {
-    if (error.response && error.response.status === 401) {
-      // Token expired, refresh it
-      accessToken = await refreshToken();
-      // Retry the request with the new token
-      return fetchSanmarPricingData(); // recursive call
+    if (error.response && error.response.status === 401 && retryCount < 3) {
+      const { newAccessToken } = await refreshToken();
+      return fetchSanmarPricingData(retryCount + 1);
     }
-    console.error('Error fetching Sanmar pricing data:', error);
     throw error;
   }
-};
-
-const getPriceForQuantity = (product, totalQuantity) => {
-  if (!product) return 0;
-  if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
-  if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
-  if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
-  if (totalQuantity >= 12) return parseFloat(product.Price_12_23) || 0;
-  if (totalQuantity >= 6) return parseFloat(product.Price_6_11) || 0;
-  return parseFloat(product.Price_2_5) || 0;
 };
 
 export default function EmbroideryCalculator() {
@@ -71,37 +82,79 @@ export default function EmbroideryCalculator() {
   const [quantities, setQuantities] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const timeoutRef = useRef(null);
+
+  const fetchData = async () => {
+    try {
+      const data = await fetchSanmarPricingData();
+      setAllProducts(data.Result);
+      const uniqueStyles = [...new Set(data.Result.map(p => p.STYLE_No))];
+      setStyles(uniqueStyles);
+      setError(null);
+    } catch (err) {
+      if (!err.response) {
+        setError('Network error, please check your connection.');
+      } else if (err.response.status === 401) {
+        setError('Unauthorized access. Please refresh or login again.');
+      } else {
+        setError('Failed to load product data. Please try again later.');
+      }
+      console.error('API Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await fetchSanmarPricingData();
-        setAllProducts(data.Result);
-        const uniqueStyles = [...new Set(data.Result.map(p => p.STYLE_No))];
-        setStyles(uniqueStyles);
-      } catch (err) {
-        setError('Failed to load product data. Please try again later.');
-        console.error('API Error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
 
-    // Set up token refresh timer
-    const refreshTimer = setInterval(() => {
-      refreshToken().catch(console.error);
-    }, (3600 - 60) * 1000); // Refresh 1 minute before token expires
+    const setupTokenRefresh = async () => {
+      try {
+        const { expiresIn } = await refreshToken();
+        timeoutRef.current = setTimeout(() => {
+          refreshToken().catch(console.error);
+        }, (expiresIn - 60) * 1000); // Refresh 1 minute before token expires
+      } catch (error) {
+        console.error('Error setting up token refresh:', error);
+      }
+    };
 
-    return () => clearInterval(refreshTimer);
+    setupTokenRefresh();
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, []);
 
-  // ... rest of the component code remains the same
+  // ... (rest of the component logic remains the same)
+
+  if (loading) {
+    return <Spinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-500">
+        {error}
+        <button onClick={fetchData} className="ml-2 p-2 bg-blue-500 text-white rounded">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
-      {/* ... rest of the JSX remains the same */}
+      {/* ... (rest of the JSX remains the same) */}
     </div>
   );
+}
+
+// Helper function to calculate total price (implement this based on your pricing logic)
+function calculateTotalPrice() {
+  // Implement your pricing calculation logic here
+  return 0; // Placeholder return value
 }
