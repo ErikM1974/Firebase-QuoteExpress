@@ -100,9 +100,9 @@ export default function EmbroideryCalculator() {
       );
 
       if (response.data?.Result?.length > 0) {
-        const styleNumbers = response.data.Result
+        const styleNumbers = [...new Set(response.data.Result
           .map(item => item.STYLE_No)
-          .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
+          .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== ''))];
         setStyles(styleNumbers);
       } else {
         throw new Error('No styles returned from the server');
@@ -119,13 +119,48 @@ export default function EmbroideryCalculator() {
     }
   }, [getAccessToken]);
 
-  // Fetch product details
-  const fetchProductDetails = useCallback(async (styleNo) => {
+  // Fetch colors for a specific style
+  const fetchColors = useCallback(async (styleNo) => {
     try {
       const accessToken = await getAccessToken();
 
       const response = await axios.get(
-        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}`,
+        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}&q.select=COLOR_NAME&q.distinct=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.data?.Result?.length > 0) {
+        const colorNames = [...new Set(response.data.Result
+          .map(item => item.COLOR_NAME)
+          .filter(colorName => typeof colorName === 'string' && colorName.trim() !== ''))];
+        setColors(prevColors => ({
+          ...prevColors,
+          [styleNo]: colorNames.sort(),
+        }));
+      } else {
+        throw new Error('No colors returned for the selected style');
+      }
+    } catch (err) {
+      if (err.response) {
+        console.error('API Error:', err.response.status, err.response.data, 'URL:', err.config.url);
+      } else {
+        console.error('Error:', err.message);
+      }
+      setError('Failed to load colors. Please try again later.');
+    }
+  }, [getAccessToken]);
+
+  // Fetch product details
+  const fetchProductDetails = useCallback(async (styleNo, colorName) => {
+    try {
+      const accessToken = await getAccessToken();
+
+      const response = await axios.get(
+        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}","COLOR_NAME":"${colorName}"}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -135,7 +170,6 @@ export default function EmbroideryCalculator() {
 
       if (response.data?.Result?.length > 0) {
         const products = response.data.Result;
-        const colorMap = {};
         const productData = {};
 
         products.forEach(product => {
@@ -149,18 +183,9 @@ export default function EmbroideryCalculator() {
             };
           }
           productData[key].sizes[product.SIZE] = product;
-
-          if (!colorMap[product.STYLE_No]) {
-            colorMap[product.STYLE_No] = new Set();
-          }
-          colorMap[product.STYLE_No].add(product.COLOR_NAME);
         });
 
         setProductDatabase(prevState => ({ ...prevState, ...productData }));
-        setColors(prevColors => ({
-          ...prevColors,
-          [styleNo]: Array.from(colorMap[styleNo] || []).sort(),
-        }));
       } else {
         throw new Error('No product details returned from the server');
       }
@@ -211,9 +236,10 @@ export default function EmbroideryCalculator() {
       if (field === 'STYLE_No') {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
-        fetchProductDetails(value);
+        fetchColors(value);
       } else if (field === 'COLOR_NAME') {
         newOrders[index].quantities = {};
+        fetchProductDetails(newOrders[index].STYLE_No, value);
       }
 
       const key = `${newOrders[index].STYLE_No}-${newOrders[index].COLOR_NAME}`;
@@ -227,7 +253,7 @@ export default function EmbroideryCalculator() {
 
       setOrders(newOrders);
     },
-    [orders, productDatabase, fetchProductDetails]
+    [orders, productDatabase, fetchColors, fetchProductDetails]
   );
 
   // Update quantity for a size
@@ -288,7 +314,7 @@ export default function EmbroideryCalculator() {
         (sum, qty) => sum + (qty || 0),
         0
       );
-      const basePrice = getPriceForQuantity(product, totalQuantity);
+      const basePrice = getPriceForQuantity(product.sizes[Object.keys(product.sizes)[0]], totalQuantity);
 
       const orderPrice = Object.entries(order.quantities).reduce(
         (sum, [size, qty]) => {
@@ -315,7 +341,7 @@ export default function EmbroideryCalculator() {
     const product = productDatabase[key];
     if (!product) return 0;
 
-    const basePrice = getPriceForQuantity(product, totalQuantity);
+    const basePrice = getPriceForQuantity(product.sizes[Object.keys(product.sizes)[0]], totalQuantity);
     return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
       if (!qty) return sum;
       const sizeProduct = product.sizes[size];
@@ -446,7 +472,7 @@ export default function EmbroideryCalculator() {
                       const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
                       const product = productDatabase[key];
                       const basePrice = product
-                        ? getPriceForQuantity(product, totalQuantity)
+                        ? getPriceForQuantity(product.sizes[size], totalQuantity)
                         : 0;
                       const sizeProduct = product?.sizes[size];
                       const surcharge =
