@@ -1,23 +1,25 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
 import debounce from 'lodash.debounce';
 
-const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-const LARGE_SIZES = ['2XL', '3XL'];
+// Constants for sizes
+const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
+const LARGE_SIZES = ['2XL', '3XL', '4XL'];
 
+// Styled components
 const Spinner = styled.div`
   border: 16px solid #f3f3f3;
-  border-radius: 50%;
   border-top: 16px solid #3498db;
-  width: 120px;
-  height: 120px;
-  animation: spin 2s linear infinite;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  animation: spin 1s linear infinite;
   margin: 20px auto;
-
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 `;
 
@@ -28,9 +30,11 @@ const AutocompleteInput = styled.input`
   width: 100%;
 `;
 
+// Refresh token function
 const refreshToken = async () => {
   try {
-    const response = await axios.post('https://c3eku948.caspio.com/oauth/token', 
+    const response = await axios.post(
+      'https://c3eku948.caspio.com/oauth/token',
       new URLSearchParams({
         grant_type: 'refresh_token',
         client_id: process.env.REACT_APP_CASPIO_CLIENT_ID,
@@ -46,7 +50,7 @@ const refreshToken = async () => {
 
     const newAccessToken = response.data.access_token;
     const expiresIn = response.data.expires_in || 3600;
-    
+
     localStorage.setItem('caspioAccessToken', newAccessToken);
 
     return { newAccessToken, expiresIn };
@@ -56,7 +60,8 @@ const refreshToken = async () => {
   }
 };
 
-const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
+// Function to fetch all products
+const fetchAllProducts = async (retryCount = 0) => {
   let accessToken = localStorage.getItem('caspioAccessToken');
 
   if (!accessToken) {
@@ -65,10 +70,8 @@ const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
   }
 
   try {
-    const url = `${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`;
-    const params = styleSearch 
-      ? `?q={"STYLE_No":{"like":"${styleSearch}"}}&s={"STYLE_No":1}&distinct=true`
-      : '?s={"STYLE_No":1}&distinct=true';
+    const url = `${process.env.REACT_APP_CASPIO_API_URL}/views/EmbroideryProducts/records`;
+    const params = '?s={"STYLE_No":1}';
 
     const response = await axios.get(url + params, {
       headers: {
@@ -80,92 +83,84 @@ const fetchSanmarPricingData = async (styleSearch = '', retryCount = 0) => {
   } catch (error) {
     if (error.response && error.response.status === 401 && retryCount < 3) {
       const { newAccessToken } = await refreshToken();
-      return fetchSanmarPricingData(styleSearch, retryCount + 1);
+      return fetchAllProducts(retryCount + 1);
     }
     throw error;
   }
 };
 
-const fetchFullProductDetails = async (selectedStyle, retryCount = 0) => {
-  let accessToken = localStorage.getItem('caspioAccessToken');
-
-  if (!accessToken) {
-    const { newAccessToken } = await refreshToken();
-    accessToken = newAccessToken;
-  }
-
-  try {
-    const url = `${process.env.REACT_APP_CASPIO_API_URL}/views/Heroku/records`;
-    const params = `?q={"STYLE_No":"${selectedStyle}"}`;
-
-    const response = await axios.get(url + params, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    return response.data;
-  } catch (error) {
-    if (error.response && error.response.status === 401 && retryCount < 3) {
-      const { newAccessToken } = await refreshToken();
-      return fetchFullProductDetails(selectedStyle, retryCount + 1);
-    }
-    throw error;
-  }
-};
-
+// EmbroideryCalculator component
 export default function EmbroideryCalculator() {
-  const [allProducts, setAllProducts] = useState([]);
+  // State variables
+  const [productDatabase, setProductDatabase] = useState({});
+  const [orders, setOrders] = useState([
+    {
+      STYLE_No: '',
+      COLOR_NAME: '',
+      quantities: {},
+      error: null,
+    },
+  ]);
   const [styles, setStyles] = useState([]);
-  const [selectedStyle, setSelectedStyle] = useState('');
-  const [colors, setColors] = useState([]);
-  const [selectedColor, setSelectedColor] = useState('');
-  const [quantities, setQuantities] = useState({});
+  const [colors, setColors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const timeoutRef = useRef(null);
 
-  const debouncedFetchStyles = useRef(
-    debounce(async (styleSearch) => {
+  // Fetch products and set up token refresh on component mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
       try {
-        const data = await fetchSanmarPricingData(styleSearch);
-        setStyles(data.Result.map(item => item.STYLE_No));
+        const data = await fetchAllProducts();
+        const products = data.Result;
+
+        // Format product data
+        const formattedData = {};
+        const stylesSet = new Set();
+        const colorsMap = {};
+
+        products.forEach((product) => {
+          if (!product.STYLE_No || !product.COLOR_NAME) return;
+          const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
+          if (!formattedData[key]) {
+            formattedData[key] = {
+              PRODUCT_TITLE: product.PRODUCT_TITLE,
+              STYLE_No: product.STYLE_No,
+              COLOR_NAME: product.COLOR_NAME,
+              sizes: {},
+            };
+          }
+          formattedData[key].sizes[product.SIZE] = product;
+
+          stylesSet.add(product.STYLE_No);
+          if (!colorsMap[product.STYLE_No]) {
+            colorsMap[product.STYLE_No] = new Set();
+          }
+          colorsMap[product.STYLE_No].add(product.COLOR_NAME);
+        });
+
+        setProductDatabase(formattedData);
+        setStyles(Array.from(stylesSet).sort());
+        setColors(
+          Object.fromEntries(
+            Object.entries(colorsMap).map(([style, colorSet]) => [
+              style,
+              Array.from(colorSet).sort(),
+            ])
+          )
+        );
         setError(null);
-      } catch (error) {
-        console.error('Error fetching styles:', error);
-        setError('Failed to fetch styles.');
+      } catch (err) {
+        console.error('Error fetching product data:', err);
+        setError('Failed to load product data. Please try again later.');
       } finally {
         setLoading(false);
       }
-    }, 300)
-  ).current;
+    };
 
-  const handleStyleInputChange = (e) => {
-    const searchValue = e.target.value;
-    setSelectedStyle(searchValue);
-    setLoading(true);
-    debouncedFetchStyles(searchValue);
-  };
-
-  const handleStyleSelect = async (style) => {
-    setSelectedStyle(style);
-    setLoading(true);
-    try {
-      const data = await fetchFullProductDetails(style);
-      setAllProducts(data.Result);
-      const uniqueColors = [...new Set(data.Result.map(p => p.COLOR_NAME))];
-      setColors(uniqueColors);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching product details:', error);
-      setError('Failed to fetch product details.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    debouncedFetchStyles('');
+    fetchProducts();
 
     const setupTokenRefresh = async () => {
       try {
@@ -187,16 +182,67 @@ export default function EmbroideryCalculator() {
     };
   }, []);
 
-  useEffect(() => {
-    if (selectedStyle) {
-      handleStyleSelect(selectedStyle);
-    } else {
-      setColors([]);
-      setSelectedColor('');
-      setQuantities({});
-    }
-  }, [selectedStyle]);
+  // Add a new order line
+  const addNewLine = () => {
+    setOrders([
+      ...orders,
+      {
+        STYLE_No: '',
+        COLOR_NAME: '',
+        quantities: {},
+        error: null,
+      },
+    ]);
+  };
 
+  // Remove an order line
+  const removeLine = (index) => {
+    if (orders.length > 1) {
+      const newOrders = orders.filter((_, i) => i !== index);
+      setOrders(newOrders);
+    }
+  };
+
+  // Update order details
+  const updateOrder = (index, field, value) => {
+    const newOrders = [...orders];
+    newOrders[index] = {
+      ...newOrders[index],
+      [field]: value,
+      error: null,
+    };
+
+    if (field === 'STYLE_No') {
+      newOrders[index].COLOR_NAME = '';
+      newOrders[index].quantities = {};
+    } else if (field === 'COLOR_NAME') {
+      newOrders[index].quantities = {};
+    }
+
+    const key = `${newOrders[index].STYLE_No}-${newOrders[index].COLOR_NAME}`;
+    if (
+      newOrders[index].STYLE_No &&
+      newOrders[index].COLOR_NAME &&
+      !productDatabase[key]
+    ) {
+      newOrders[index].error = 'Invalid style or color combination';
+    }
+
+    setOrders(newOrders);
+  };
+
+  // Update quantity for a specific size
+  const updateQuantity = (orderIndex, size, value) => {
+    const newOrders = [...orders];
+    const newQuantities = {
+      ...newOrders[orderIndex].quantities,
+      [size]: parseInt(value) || 0,
+    };
+    newOrders[orderIndex].quantities = newQuantities;
+    setOrders(newOrders);
+  };
+
+  // Get price based on total quantity
   const getPriceForQuantity = (product, totalQuantity) => {
     if (!product) return 0;
     if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
@@ -207,100 +253,273 @@ export default function EmbroideryCalculator() {
     return parseFloat(product.Price_2_5) || 0;
   };
 
-  const totalQuantity = useMemo(() => 
-    Object.values(quantities).reduce((sum, qty) => sum + qty, 0),
-    [quantities]
-  );
+  // Calculate total quantities and prices
+  const totals = useMemo(() => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return (
+        acc +
+        Object.values(order.quantities).reduce(
+          (sum, qty) => sum + (qty || 0),
+          0
+        )
+      );
+    }, 0);
 
-  const totalPrice = useMemo(() => {
-    if (!selectedStyle || !selectedColor) return 0;
-    const products = allProducts.filter(p => p.STYLE_No === selectedStyle && p.COLOR_NAME === selectedColor);
-    if (products.length === 0) return 0;
-    return Object.entries(quantities).reduce((sum, [size, qty]) => {
-      const sizeProduct = products.find(p => p.SIZE === size);
-      if (!sizeProduct) return sum;
-      const basePrice = getPriceForQuantity(sizeProduct, totalQuantity);
-      const surcharge = parseFloat(sizeProduct.Surcharge) || 0;
+    const totalPrice = orders.reduce((acc, order) => {
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+      const product = productDatabase[key];
+      if (!product) return acc;
+
+      const orderQuantity = Object.values(order.quantities).reduce(
+        (sum, qty) => sum + (qty || 0),
+        0
+      );
+      const basePrice = getPriceForQuantity(product, totalQuantity);
+
+      const orderPrice = Object.entries(order.quantities).reduce(
+        (sum, [size, qty]) => {
+          if (!qty) return sum;
+          const sizeProduct = product.sizes[size];
+          const surcharge =
+            sizeProduct && sizeProduct.Surcharge
+              ? parseFloat(sizeProduct.Surcharge) || 0
+              : 0;
+          return sum + (basePrice + surcharge) * qty;
+        },
+        0
+      );
+
+      return acc + orderPrice;
+    }, 0);
+
+    return { quantity: totalQuantity, price: totalPrice };
+  }, [orders, productDatabase]);
+
+  // Calculate total for a single order line
+  const calculateRowTotal = (order, totalQuantity) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return 0;
+
+    const basePrice = getPriceForQuantity(product, totalQuantity);
+    return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+      if (!qty) return sum;
+      const sizeProduct = product.sizes[size];
+      const surcharge =
+        sizeProduct && sizeProduct.Surcharge
+          ? parseFloat(sizeProduct.Surcharge) || 0
+          : 0;
       return sum + (basePrice + surcharge) * qty;
     }, 0);
-  }, [allProducts, selectedStyle, selectedColor, quantities, totalQuantity]);
+  };
 
+  // Handle order submission
+  const handleSubmitOrder = () => {
+    console.log('Submitting order:', orders);
+    alert('Order submitted successfully!');
+  };
+
+  // Get available sizes for a specific order
+  const getAvailableSizes = (order) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return DEFAULT_SIZES;
+
+    const availableSizes = Object.keys(product.sizes);
+    if (availableSizes.includes('OSFA')) {
+      return ['OSFA'];
+    }
+    return availableSizes.sort(
+      (a, b) => DEFAULT_SIZES.indexOf(a) - DEFAULT_SIZES.indexOf(b)
+    );
+  };
+
+  // Loading state
   if (loading) {
     return <Spinner />;
   }
 
+  // Error state
   if (error) {
     return (
       <div className="text-red-500">
         {error}
-        <button onClick={() => debouncedFetchStyles('')} className="ml-2 p-2 bg-blue-500 text-white rounded">
+        <button
+          onClick={() => window.location.reload()}
+          className="ml-2 p-2 bg-blue-500 text-white rounded"
+        >
           Retry
         </button>
       </div>
     );
   }
 
+  // Main render
   return (
     <div className="w-full p-4 bg-gray-100">
-      <h1 className="text-2xl font-bold mb-4 text-green-600">Embroidery Pricing Calculator</h1>
+      <h1 className="text-2xl font-bold mb-4 text-green-600">
+        Embroidery Order Form
+      </h1>
+      <p className="mb-4">Number of styles available: {styles.length}</p>
+      <table className="w-full border-collapse border border-gray-300 mb-4 bg-white">
+        <thead>
+          <tr className="bg-green-600 text-white">
+            <th className="border border-gray-300 p-2">Style No</th>
+            <th className="border border-gray-300 p-2">Color Name</th>
+            <th className="border border-gray-300 p-2">Product Title</th>
+            <th className="border border-gray-300 p-2">Sizes</th>
+            <th className="border border-gray-300 p-2">Row Total</th>
+            <th className="border border-gray-300 p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order, index) => {
+            const availableSizes = getAvailableSizes(order);
+            const totalQuantity = totals.quantity;
+            return (
+              <tr key={index}>
+                <td className="border border-gray-300 p-2">
+                  <label htmlFor={`style-${index}`} className="sr-only">
+                    Style Number
+                  </label>
+                  <AutocompleteInput
+                    id={`style-${index}`}
+                    list={`styles-${index}`}
+                    value={order.STYLE_No}
+                    onChange={(e) =>
+                      updateOrder(index, 'STYLE_No', e.target.value)
+                    }
+                    placeholder="Enter or select style"
+                  />
+                  <datalist id={`styles-${index}`}>
+                    {styles.map((style) => (
+                      <option key={style} value={style} />
+                    ))}
+                  </datalist>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <label htmlFor={`color-${index}`} className="sr-only">
+                    Color Name
+                  </label>
+                  <select
+                    id={`color-${index}`}
+                    value={order.COLOR_NAME}
+                    onChange={(e) =>
+                      updateOrder(index, 'COLOR_NAME', e.target.value)
+                    }
+                    className="w-full p-2 border rounded"
+                    disabled={!order.STYLE_No}
+                  >
+                    <option value="">Select Color</option>
+                    {colors[order.STYLE_No]?.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  {
+                    productDatabase[
+                      `${order.STYLE_No}-${order.COLOR_NAME}`
+                    ]?.PRODUCT_TITLE || ''
+                  }
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <div className="flex flex-wrap">
+                    {availableSizes.map((size) => {
+                      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+                      const product = productDatabase[key];
+                      const basePrice = product
+                        ? getPriceForQuantity(product, totalQuantity)
+                        : 0;
+                      const sizeProduct = product?.sizes[size];
+                      const surcharge =
+                        sizeProduct && sizeProduct.Surcharge
+                          ? parseFloat(sizeProduct.Surcharge) || 0
+                          : 0;
+                      const price = basePrice + surcharge;
 
+                      return (
+                        <div
+                          key={size}
+                          className={`w-1/4 p-1 ${
+                            LARGE_SIZES.includes(size) ? 'bg-green-100' : ''
+                          }`}
+                        >
+                          <label
+                            htmlFor={`qty-${index}-${size}`}
+                            className="text-xs font-bold mb-1 block"
+                          >
+                            {size}
+                          </label>
+                          <input
+                            id={`qty-${index}-${size}`}
+                            type="number"
+                            value={order.quantities[size] || ''}
+                            onChange={(e) =>
+                              updateQuantity(index, size, e.target.value)
+                            }
+                            className="w-full mb-1 text-sm p-1 border rounded"
+                            min="0"
+                            aria-label={`Quantity for size ${size}`}
+                          />
+                          <div className="text-xs text-gray-500">
+                            ${price.toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </td>
+                <td className="border border-gray-300 p-2 font-bold">
+                  ${calculateRowTotal(order, totalQuantity).toFixed(2)}
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <button
+                    onClick={() => removeLine(index)}
+                    className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                    aria-label="Remove line"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {orders.some((order) => order.error) && (
+        <div className="text-red-500 mb-4">
+          {orders.map(
+            (order, index) =>
+              order.error && (
+                <div key={index}>
+                  Line {index + 1}: {order.error}
+                </div>
+              )
+          )}
+        </div>
+      )}
       <div className="mb-4">
-        <label className="block mb-2">Style Number:</label>
-        <AutocompleteInput
-          type="text"
-          value={selectedStyle}
-          onChange={handleStyleInputChange}
-          onBlur={() => handleStyleSelect(selectedStyle)}
-          placeholder="Search for a style"
-          list="styleOptions"
-        />
-        <datalist id="styleOptions">
-          {styles.map((style) => (
-            <option key={style} value={style}>
-              {style}
-            </option>
-          ))}
-        </datalist>
+        <button
+          onClick={addNewLine}
+          className="bg-green-600 text-white px-4 py-2 rounded mr-2 hover:bg-green-700"
+        >
+          Add Line
+        </button>
+        <button
+          onClick={handleSubmitOrder}
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+        >
+          Submit Order
+        </button>
       </div>
-
-      {selectedStyle && (
-        <div className="mb-4">
-          <label className="block mb-2">Color:</label>
-          <select 
-            value={selectedColor} 
-            onChange={(e) => setSelectedColor(e.target.value)}
-            className="w-full p-2 border rounded"
-          >
-            <option value="">Select a color</option>
-            {colors.map(color => (
-              <option key={color} value={color}>{color}</option>
-            ))}
-          </select>
-        </div>
-      )}
-      {selectedColor && (
-        <div className="mb-4">
-          <h2 className="text-xl font-bold mb-2">Quantities:</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {STANDARD_SIZES.map(size => (
-              <div key={size} className={`p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
-                <label className="block mb-1">{size}:</label>
-                <input
-                  type="number"
-                  value={quantities[size] || ''}
-                  onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})}
-                  className="w-full p-1 border rounded"
-                  min="0"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="mt-4">
-        <h2 className="text-xl font-bold">Order Summary:</h2>
-        <p>Total Quantity: {totalQuantity}</p>
-        <p>Total Price: ${totalPrice.toFixed(2)}</p>
+      <div className="text-xl font-bold text-gray-700">
+        Total Quantity: {totals.quantity}
+      </div>
+      <div className="text-xl font-bold text-gray-700">
+        Total Price: ${totals.price.toFixed(2)}
       </div>
     </div>
   );
