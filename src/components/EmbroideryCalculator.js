@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import styled from 'styled-components';
+import debounce from 'lodash.debounce';
 
 const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2/views/Heroku/records';
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
@@ -39,6 +40,7 @@ export default function EmbroideryCalculator() {
     },
   ]);
   const [styles, setStyles] = useState([]);
+  const [filteredStyles, setFilteredStyles] = useState([]);
   const [colors, setColors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -104,6 +106,7 @@ export default function EmbroideryCalculator() {
           .map(item => item.STYLE_No)
           .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== ''))];
         setStyles(styleNumbers);
+        setFilteredStyles(styleNumbers);
       } else {
         throw new Error('No styles returned from the server');
       }
@@ -198,6 +201,14 @@ export default function EmbroideryCalculator() {
       setError('Failed to load product details. Please try again later.');
     }
   }, [getAccessToken]);
+
+  // Filter styles based on user input
+  const filterStyles = useCallback((input) => {
+    const filtered = styles.filter(style => 
+      style.toLowerCase().includes(input.toLowerCase())
+    );
+    setFilteredStyles(filtered);
+  }, [styles]);
 
   // Initial data fetch and token setup
   useEffect(() => {
@@ -312,10 +323,6 @@ export default function EmbroideryCalculator() {
       const product = productDatabase[key];
       if (!product) return acc;
 
-      const orderQuantity = Object.values(order.quantities).reduce(
-        (sum, qty) => sum + (qty || 0),
-        0
-      );
       const basePrice = getPriceForQuantity(product.sizes[Object.keys(product.sizes)[0]], totalQuantity);
 
       const orderPrice = Object.entries(order.quantities).reduce(
@@ -338,12 +345,12 @@ export default function EmbroideryCalculator() {
   }, [orders, productDatabase]);
 
   // Calculate row total for an order
-  const calculateRowTotal = (order, totalQuantity) => {
+  const calculateRowTotal = (order) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
     const product = productDatabase[key];
     if (!product) return 0;
 
-    const basePrice = getPriceForQuantity(product.sizes[Object.keys(product.sizes)[0]], totalQuantity);
+    const basePrice = getPriceForQuantity(product.sizes[Object.keys(product.sizes)[0]], totals.quantity);
     return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
       if (!qty) return sum;
       const sizeProduct = product.sizes[size];
@@ -411,7 +418,7 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
             {STANDARD_SIZES.map(size => (
-              <th key={size} className="border border-gray-300 p-2">{size}</th>
+              <th key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-700' : ''}`}>{size}</th>
             ))}
             <th className="border border-gray-300 p-2">Other Sizes</th>
             <th className="border border-gray-300 p-2">Row Total</th>
@@ -421,38 +428,31 @@ export default function EmbroideryCalculator() {
         <tbody>
           {orders.map((order, index) => {
             const availableSizes = getAvailableSizes(order);
-            const totalQuantity = totals.quantity;
+            const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+            const product = productDatabase[key];
             return (
               <tr key={index}>
                 <td className="border border-gray-300 p-2">
-                  <label htmlFor={`style-${index}`} className="sr-only">
-                    Style Number
-                  </label>
                   <AutocompleteInput
-                    id={`style-${index}`}
-                    list={`styles-${index}`}
+                    type="text"
                     value={order.STYLE_No}
-                    onChange={(e) =>
-                      updateOrder(index, 'STYLE_No', e.target.value)
-                    }
-                    placeholder="Enter or select style"
+                    onChange={(e) => {
+                      updateOrder(index, 'STYLE_No', e.target.value);
+                      filterStyles(e.target.value);
+                    }}
+                    placeholder="Enter style number"
+                    list={`styles-list-${index}`}
                   />
-                  <datalist id={`styles-${index}`}>
-                    {styles.map((style) => (
+                  <datalist id={`styles-list-${index}`}>
+                    {filteredStyles.map(style => (
                       <option key={style} value={style} />
                     ))}
                   </datalist>
                 </td>
                 <td className="border border-gray-300 p-2">
-                  <label htmlFor={`color-${index}`} className="sr-only">
-                    Color Name
-                  </label>
                   <select
-                    id={`color-${index}`}
                     value={order.COLOR_NAME}
-                    onChange={(e) =>
-                      updateOrder(index, 'COLOR_NAME', e.target.value)
-                    }
+                    onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
                     className="w-full p-2 border rounded"
                     disabled={!order.STYLE_No}
                   >
@@ -465,28 +465,22 @@ export default function EmbroideryCalculator() {
                   </select>
                 </td>
                 <td className="border border-gray-300 p-2">
-                  {
-                    productDatabase[
-                      `${order.STYLE_No}-${order.COLOR_NAME}`
-                    ]?.PRODUCT_TITLE || ''
-                  }
+                  {product?.PRODUCT_TITLE || ''}
                 </td>
                 {STANDARD_SIZES.map(size => (
-                  <td key={size} className="border border-gray-300 p-2">
+                  <td key={size} className={`border border-gray-300 p-2 ${LARGE_SIZES.includes(size) ? 'bg-green-100' : ''}`}>
                     <input
                       type="number"
                       value={order.quantities[size] || ''}
-                      onChange={(e) =>
-                        updateQuantity(index, size, e.target.value)
-                      }
+                      onChange={(e) => updateQuantity(index, size, e.target.value)}
                       className="w-full p-1 border rounded"
                       min="0"
                       disabled={!availableSizes.includes(size)}
                     />
-                    {availableSizes.includes(size) && (
+                    {availableSizes.includes(size) && product && (
                       <div className="text-xs text-gray-500">
-                        ${(getPriceForQuantity(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size], totalQuantity) + 
-                           (LARGE_SIZES.includes(size) ? parseFloat(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size]?.Surcharge || 0) : 0)).toFixed(2)}
+                        ${(getPriceForQuantity(product.sizes[size], totals.quantity) + 
+                           (LARGE_SIZES.includes(size) ? parseFloat(product.sizes[size]?.Surcharge || 0) : 0)).toFixed(2)}
                       </div>
                     )}
                   </td>
@@ -498,21 +492,21 @@ export default function EmbroideryCalculator() {
                       <input
                         type="number"
                         value={order.quantities[size] || ''}
-                        onChange={(e) =>
-                          updateQuantity(index, size, e.target.value)
-                        }
+                        onChange={(e) => updateQuantity(index, size, e.target.value)}
                         className="w-full p-1 border rounded"
                         min="0"
                       />
-                      <div className="text-xs text-gray-500">
-                        ${(getPriceForQuantity(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size], totalQuantity) + 
-                           parseFloat(productDatabase[`${order.STYLE_No}-${order.COLOR_NAME}`]?.sizes[size]?.Surcharge || 0)).toFixed(2)}
-                      </div>
+                      {product && (
+                        <div className="text-xs text-gray-500">
+                          ${(getPriceForQuantity(product.sizes[size], totals.quantity) + 
+                             parseFloat(product.sizes[size]?.Surcharge || 0)).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </td>
                 <td className="border border-gray-300 p-2 font-bold">
-                  ${calculateRowTotal(order, totalQuantity).toFixed(2)}
+                  ${calculateRowTotal(order).toFixed(2)}
                 </td>
                 <td className="border border-gray-300 p-2">
                   <button
