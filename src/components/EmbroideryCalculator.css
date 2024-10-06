@@ -1,0 +1,114 @@
+.embroidery-calculator {
+  width: 100%;
+  padding: 1rem;
+  background-color: #f3f4f6;
+}
+
+.embroidery-calculator h1 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  color: #10b981;
+}
+
+.embroidery-calculator table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  background-color: white;
+}
+
+.embroidery-calculator th,
+.embroidery-calculator td {
+  border: 1px solid #d1d5db;
+  padding: 0.5rem;
+}
+
+.embroidery-calculator th {
+  background-color: #10b981;
+  color: white;
+}
+
+.embroidery-calculator input[type="number"] {
+  width: 100%;
+  padding: 0.25rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+}
+
+.embroidery-calculator button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.embroidery-calculator button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.embroidery-calculator button:last-child {
+  margin-right: 0;
+}
+
+.embroidery-calculator .error-message {
+  background-color: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #b91c1c;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border-radius: 0.25rem;
+}
+
+.embroidery-calculator .loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+}
+
+.embroidery-calculator .spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.embroidery-calculator select {
+  width: 100%;
+  padding: 0.25rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: white;
+}
+
+.embroidery-calculator select:disabled {
+  background-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+.embroidery-calculator .react-select__control {
+  border-color: #d1d5db;
+}
+
+.embroidery-calculator .react-select__control--is-focused {
+  border-color: #10b981;
+  box-shadow: 0 0 0 1px #10b981;
+}
+
+.embroidery-calculator .react-select__option--is-selected {
+  background-color: #10b981;
+}
+
+.embroidery-calculator .react-select__option--is-focused {
+  background-color: #d1fae5;
+}
