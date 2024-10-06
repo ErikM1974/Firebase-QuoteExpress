@@ -162,7 +162,169 @@ export default function EmbroideryCalculator() {
     [getAccessToken]
   );
 
-  // ... (rest of the component code remains unchanged)
+  const getAvailableSizes = useCallback((order) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return { mainSizes: [], otherSizes: [] };
+
+    const availableSizes = Object.keys(product.sizes);
+    const mainSizes = [];
+    const otherSizes = [];
+
+    availableSizes.forEach((size) => {
+      if (MAIN_SIZES.includes(size)) {
+        mainSizes.push(size);
+      } else {
+        otherSizes.push(size);
+      }
+    });
+
+    return { mainSizes, otherSizes };
+  }, [productDatabase]);
+
+  const calculateLineQuantity = useCallback((order) => {
+    return Object.values(order.quantities).reduce(
+      (sum, qty) => sum + (qty || 0),
+      0
+    );
+  }, []);
+
+  const updateOrder = useCallback(
+    (index, field, value) => {
+      setOrders((prevOrders) => {
+        const newOrders = [...prevOrders];
+        newOrders[index] = {
+          ...newOrders[index],
+          [field]: value,
+          error: null,
+        };
+
+        if (field === 'STYLE_No') {
+          newOrders[index].COLOR_NAME = '';
+          newOrders[index].quantities = {};
+          if (value && !colors[value]) {
+            // Fetch product details if not already in the database
+            fetchProductDetails(value);
+          }
+        } else if (field === 'COLOR_NAME') {
+          newOrders[index].quantities = {};
+        }
+
+        return newOrders;
+      });
+    },
+    [colors, fetchProductDetails]
+  );
+
+  const fetchProductDetails = useCallback(async (styleNo) => {
+    try {
+      const accessToken = await getAccessToken();
+      const response = await axios.get(
+        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.data?.Result?.length > 0) {
+        const products = response.data.Result;
+        const colorMap = {};
+        const productData = {};
+
+        products.forEach((product) => {
+          const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
+          if (!productData[key]) {
+            productData[key] = {
+              PRODUCT_TITLE: product.PRODUCT_NAME || `${product.STYLE_No} - ${product.COLOR_NAME}`,
+              STYLE_No: product.STYLE_No,
+              COLOR_NAME: product.COLOR_NAME,
+              sizes: {},
+              prices: {
+                Price_2_5: product.Price_2_5,
+                Price_6_11: product.Price_6_11,
+                Price_12_23: product.Price_12_23,
+                Price_24_47: product.Price_24_47,
+                Price_48_71: product.Price_48_71,
+                Price_72_plus: product.Price_72,
+              },
+            };
+          }
+          productData[key].sizes[product.SIZE] = {
+            ...product,
+            Surcharge: parseFloat(product.Surcharge) || 0,
+            SizeOrder: parseInt(product.SizeOrder) || 999,
+          };
+
+          if (!colorMap[product.STYLE_No]) {
+            colorMap[product.STYLE_No] = new Set();
+          }
+          colorMap[product.STYLE_No].add(product.COLOR_NAME);
+        });
+
+        setProductDatabase((prevState) => ({ ...prevState, ...productData }));
+        setColors((prevColors) => ({
+          ...prevColors,
+          [styleNo]: Array.from(colorMap[styleNo] || []).sort(),
+        }));
+      } else {
+        throw new Error('No product details returned from the server');
+      }
+    } catch (err) {
+      console.error('Failed to load product details:', err);
+      setError('Failed to load product details. Please try again later.');
+    }
+  }, [getAccessToken]);
+
+  const totals = useMemo(() => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return (
+        acc +
+        Object.values(order.quantities).reduce(
+          (sum, qty) => sum + (qty || 0),
+          0
+        )
+      );
+    }, 0);
+
+    const totalPrice = orders.reduce((acc, order) => {
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+      const product = productDatabase[key];
+      if (!product) return acc;
+
+      const orderPrice = Object.entries(order.quantities).reduce(
+        (sum, [size, qty]) => {
+          if (!qty) return sum;
+          const sizeProduct = product.sizes[size];
+          const basePrice = getPriceForQuantity(product, totalQuantity);
+          const surcharge =
+            sizeProduct && sizeProduct.Surcharge
+              ? parseFloat(sizeProduct.Surcharge) || 0
+              : 0;
+          return sum + (basePrice + surcharge) * qty;
+        },
+        0
+      );
+
+      return acc + orderPrice;
+    }, 0);
+
+    return { quantity: totalQuantity, price: totalPrice };
+  }, [orders, productDatabase]);
+
+  const getPriceForQuantity = useCallback((product, totalQuantity) => {
+    if (!product) return 0;
+
+    const { prices } = product;
+
+    if (totalQuantity >= 72) return parseFloat(prices.Price_72_plus) || 0;
+    if (totalQuantity >= 48) return parseFloat(prices.Price_48_71) || 0;
+    if (totalQuantity >= 24) return parseFloat(prices.Price_24_47) || 0;
+    if (totalQuantity >= 12) return parseFloat(prices.Price_12_23) || 0;
+    if (totalQuantity >= 6) return parseFloat(prices.Price_6_11) || 0;
+    return parseFloat(prices.Price_2_5) || 0;
+  }, []);
 
   return (
     <div className="w-full p-4 bg-gray-100">
