@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import AsyncSelect from 'react-select/async';
+import debounce from 'lodash/debounce';
 import './EmbroideryCalculator.css';
 
 const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2/views/Heroku/records';
 const MAIN_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+const LARGE_SIZES = ['2XL', '3XL', '4XL'];
 
 const LoadingSpinner = () => (
   <div className="loading-spinner">
@@ -12,9 +14,17 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const getPriceForQuantity = (product, totalQuantity) => {
+  if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
+  if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
+  if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
+  if (totalQuantity >= 12) return parseFloat(product.Price_12_23) || 0;
+  if (totalQuantity >= 6) return parseFloat(product.Price_6_11) || 0;
+  return parseFloat(product.Price_2_5) || 0;
+};
+
 export default function EmbroideryCalculator() {
-  // Keep productDatabase for future use when implementing pricing logic
-  const [productDatabase] = useState({});
+  const [productDatabase, setProductDatabase] = useState({});
   const [orders, setOrders] = useState([
     {
       STYLE_No: '',
@@ -27,6 +37,8 @@ export default function EmbroideryCalculator() {
   const [colors, setColors] = useState({});
   const [errorMessage, setErrorMessage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const abortController = React.useRef(null);
 
   useEffect(() => {
     console.log('Client ID:', process.env.REACT_APP_CASPIO_CLIENT_ID.substring(0, 5) + '...');
@@ -79,20 +91,23 @@ export default function EmbroideryCalculator() {
     setIsLoading(true);
     try {
       const accessToken = await getAccessToken();
-      const query = 'q.select=STYLE_No&q.distinct=true&q.sort=STYLE_No&q.limit=1000';
+      const query = 'q.select=STYLE_No,PRODUCT_TITLE&q.distinct=true&q.sort=STYLE_No&q.limit=1000';
       const response = await axios.get(`${API_BASE_URL}?${query}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
 
-      const stylesSet = new Set();
+      const stylesData = {};
       response.data?.Result.forEach((item) => {
-        if (item.STYLE_No) stylesSet.add(item.STYLE_No);
+        if (item.STYLE_No) {
+          stylesData[item.STYLE_No] = item;
+        }
       });
 
-      setStyles(Array.from(stylesSet));
-      console.log('Fetched styles:', Array.from(stylesSet));
+      setStyles(Object.keys(stylesData));
+      setProductDatabase(stylesData);
+      console.log('Fetched styles:', stylesData);
     } catch (err) {
       console.error('Error fetching styles:', err);
       setErrorMessage('Failed to load styles. Please try again.');
@@ -112,7 +127,7 @@ export default function EmbroideryCalculator() {
     try {
       console.log(`Fetching colors for style: ${styleNo}`);
       const accessToken = await getAccessToken();
-      const query = `q={"STYLE_No":"${styleNo}"}&q.select=COLOR_NAME&q.distinct=true&q.sort=COLOR_NAME`;
+      const query = `q=${encodeURIComponent(JSON.stringify({ STYLE_No: styleNo }))}&q.select=COLOR_NAME,PRODUCT_TITLE,Price_2_5,Price_6_11,Price_12_23,Price_24_47,Price_48_71,Price_72_plus,Surcharge,Size&q.sort=COLOR_NAME`;
       const response = await axios.get(`${API_BASE_URL}?${query}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -120,14 +135,25 @@ export default function EmbroideryCalculator() {
       });
 
       const colorSet = new Set();
+      const productDetails = {};
       response.data?.Result.forEach((item) => {
         if (item.COLOR_NAME) colorSet.add(item.COLOR_NAME);
+        productDetails[item.COLOR_NAME] = item;
       });
 
       setColors((prevColors) => ({
         ...prevColors,
         [styleNo]: Array.from(colorSet),
       }));
+
+      setProductDatabase((prevDatabase) => ({
+        ...prevDatabase,
+        [styleNo]: {
+          ...prevDatabase[styleNo],
+          colors: productDetails,
+        },
+      }));
+
       console.log('Fetched colors for style:', styleNo, Array.from(colorSet));
     } catch (err) {
       console.error('Error fetching colors:', err);
@@ -165,6 +191,33 @@ export default function EmbroideryCalculator() {
     [colors, fetchColors]
   );
 
+  const calculateOrderTotals = useCallback(() => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return acc + Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
+    }, 0);
+
+    return orders.reduce((acc, order) => {
+      const key = order.STYLE_No;
+      const product = productDatabase[key]?.colors?.[order.COLOR_NAME];
+      if (!product) return acc;
+
+      const basePrice = getPriceForQuantity(product, totalQuantity);
+
+      const orderPrice = Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+        if (!qty) return sum;
+        const surcharge = LARGE_SIZES.includes(size) ? parseFloat(product.Surcharge) || 0 : 0;
+        return sum + (basePrice + surcharge) * qty;
+      }, 0);
+
+      return {
+        quantity: acc.quantity + totalQuantity,
+        price: acc.price + orderPrice,
+      };
+    }, { quantity: 0, price: 0 });
+  }, [orders, productDatabase]);
+
+  const totals = useMemo(() => calculateOrderTotals(), [calculateOrderTotals]);
+
   return (
     <div className="embroidery-calculator">
       <h1>Embroidery Order Form</h1>
@@ -192,8 +245,9 @@ export default function EmbroideryCalculator() {
         </thead>
         <tbody>
           {orders.map((order, index) => {
-            const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
-            const product = productDatabase[key];
+            const product = productDatabase[order.STYLE_No]?.colors?.[order.COLOR_NAME];
+            const lineQuantity = Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
+            const rowTotal = product ? getPriceForQuantity(product, totals.quantity) * lineQuantity : 0;
 
             return (
               <tr key={index}>
@@ -244,7 +298,7 @@ export default function EmbroideryCalculator() {
                       onChange={(e) =>
                         updateOrder(index, 'quantities', {
                           ...order.quantities,
-                          [size]: e.target.value,
+                          [size]: parseInt(e.target.value) || 0,
                         })
                       }
                       min="0"
@@ -255,12 +309,8 @@ export default function EmbroideryCalculator() {
                 <td>
                   {/* Add logic for "other sizes" as needed */}
                 </td>
-                <td>
-                  {/* Line Quantity */}
-                </td>
-                <td>
-                  {/* Row Total */}
-                </td>
+                <td>{lineQuantity}</td>
+                <td>${rowTotal.toFixed(2)}</td>
                 <td>
                   <button
                     onClick={() => setOrders(orders.filter((_, i) => i !== index))}
@@ -285,6 +335,10 @@ export default function EmbroideryCalculator() {
       <button onClick={() => console.log('Submit order:', orders)} disabled={isLoading}>
         Submit Order
       </button>
+      <div>
+        <p>Total Quantity: {totals.quantity}</p>
+        <p>Total Price: ${totals.price.toFixed(2)}</p>
+      </div>
     </div>
   );
 }
