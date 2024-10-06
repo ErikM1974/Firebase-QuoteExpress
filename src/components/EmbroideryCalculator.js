@@ -65,7 +65,7 @@ export default function EmbroideryCalculator() {
   const [error, setError] = useState(null);
 
   const timeoutRef = useRef(null);
-  const abortController = useRef(new AbortController());
+  const abortController = useRef(null);
 
   const refreshToken = useCallback(async () => {
     try {
@@ -106,48 +106,52 @@ export default function EmbroideryCalculator() {
     return accessToken;
   }, [refreshToken]);
 
-  const loadStyles = useCallback(debounce(async (inputValue) => {
-    abortController.current.abort(); // Cancel the previous request
-    abortController.current = new AbortController();
+  const loadStyles = useCallback(
+    debounce(async (inputValue) => {
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+      abortController.current = new AbortController();
 
-    try {
-      const accessToken = await getAccessToken();
-      const query = `q={"STYLE_No":{"ilike":"%25${inputValue}%25"}}&q.select=STYLE_No&q.distinct=true&q.sort=STYLE_No`;
-      const response = await axios.get(
-        `${API_BASE_URL}?${query}`,
-        {
+      try {
+        const accessToken = await getAccessToken();
+        const query = `q={"STYLE_No":{"ilike":"%${inputValue}%"}}&q.select=STYLE_No,COLOR_NAME&q.distinct=true&q.sort=STYLE_No`;
+        const response = await axios.get(`${API_BASE_URL}?${query}`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-          signal: abortController.current.signal
+          signal: abortController.current.signal,
+        });
+
+        if (response.data?.Result?.length > 0) {
+          const styleOptions = response.data.Result
+            .filter((item) => item.STYLE_No && typeof item.STYLE_No === 'string')
+            .map((item) => ({
+              value: item.STYLE_No,
+              label: `${item.STYLE_No} - ${item.COLOR_NAME || 'N/A'}`,
+            }));
+
+          // Remove duplicates based on value (STYLE_No)
+          const uniqueOptions = Array.from(
+            new Map(styleOptions.map((item) => [item.value, item])).values()
+          );
+
+          return uniqueOptions;
+        } else {
+          return [];
         }
-      );
-
-      if (response.data?.Result?.length > 0) {
-        const styleNumbers = response.data.Result
-          .map(item => item.STYLE_No)
-          .filter(styleNo => typeof styleNo === 'string' && styleNo.trim() !== '');
-
-        // Remove duplicates and sort
-        const uniqueStyles = Array.from(new Set(styleNumbers)).sort();
-
-        // Map to options
-        const options = uniqueStyles.map(style => ({ value: style, label: style }));
-
-        return options;
-      } else {
+      } catch (err) {
+        if (axios.isCancel(err)) {
+          console.log('Request canceled', err.message);
+        } else {
+          console.error('Error loading styles:', err);
+          setError('Failed to load styles. Please try again.');
+        }
         return [];
       }
-    } catch (err) {
-      if (axios.isCancel(err)) {
-        console.log('Request canceled', err.message);
-      } else {
-        console.error('Error loading styles:', err);
-        setError('Failed to load styles. Please try again.');
-      }
-      return [];
-    }
-  }, 300), [getAccessToken]);
+    }, 300),
+    [getAccessToken]
+  );
 
   const fetchProductDetails = useCallback(async (styleNo) => {
     try {
@@ -167,7 +171,7 @@ export default function EmbroideryCalculator() {
         const colorMap = {};
         const productData = {};
 
-        products.forEach(product => {
+        products.forEach((product) => {
           const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
           if (!productData[key]) {
             productData[key] = {
@@ -197,11 +201,20 @@ export default function EmbroideryCalculator() {
           colorMap[product.STYLE_No].add(product.COLOR_NAME);
         });
 
-        setProductDatabase(prevState => ({ ...prevState, ...productData }));
-        setColors(prevColors => ({
+        setProductDatabase((prevState) => ({ ...prevState, ...productData }));
+        setColors((prevColors) => ({
           ...prevColors,
           [styleNo]: Array.from(colorMap[styleNo] || []).sort(),
         }));
+
+        // Update orders with the first available color
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order.STYLE_No === styleNo && !order.COLOR_NAME
+              ? { ...order, COLOR_NAME: Array.from(colorMap[styleNo] || [])[0] || '' }
+              : order
+          )
+        );
       } else {
         throw new Error('No product details returned from the server');
       }
@@ -223,7 +236,7 @@ export default function EmbroideryCalculator() {
       if (field === 'STYLE_No') {
         newOrders[index].COLOR_NAME = '';
         newOrders[index].quantities = {};
-        if (value && !productDatabase[value]) {
+        if (value && !colors[value]) {
           fetchProductDetails(value);
         }
       } else if (field === 'COLOR_NAME') {
@@ -241,7 +254,7 @@ export default function EmbroideryCalculator() {
 
       setOrders(newOrders);
     },
-    [orders, productDatabase, fetchProductDetails]
+    [orders, colors, productDatabase, fetchProductDetails]
   );
 
   const updateQuantity = (orderIndex, size, value) => {
@@ -359,7 +372,7 @@ export default function EmbroideryCalculator() {
   };
 
   const addNewLine = () => {
-    setOrders(prevOrders => [
+    setOrders((prevOrders) => [
       ...prevOrders,
       {
         STYLE_No: '',
@@ -371,7 +384,7 @@ export default function EmbroideryCalculator() {
   };
 
   const removeLine = (index) => {
-    setOrders(prevOrders => prevOrders.filter((_, i) => i !== index));
+    setOrders((prevOrders) => prevOrders.filter((_, i) => i !== index));
   };
 
   const handleSubmitOrder = () => {
@@ -381,7 +394,9 @@ export default function EmbroideryCalculator() {
 
   useEffect(() => {
     return () => {
-      abortController.current.abort();
+      if (abortController.current) {
+        abortController.current.abort();
+      }
     };
   }, []);
 
@@ -417,7 +432,7 @@ export default function EmbroideryCalculator() {
             <th className="border border-gray-300 p-2">Style No</th>
             <th className="border border-gray-300 p-2">Color Name</th>
             <th className="border border-gray-300 p-2">Product Title</th>
-            {MAIN_SIZES.map(size => (
+            {MAIN_SIZES.map((size) => (
               <th key={size} className="border border-gray-300 p-2">
                 {size}
               </th>
@@ -449,7 +464,7 @@ export default function EmbroideryCalculator() {
                     }}
                     value={
                       order.STYLE_No
-                        ? { value: order.STYLE_No, label: order.STYLE_No }
+                        ? { value: order.STYLE_No, label: `${order.STYLE_No} - ${order.COLOR_NAME || 'Select Color'}` }
                         : null
                     }
                     placeholder="Enter or select style"
@@ -475,7 +490,7 @@ export default function EmbroideryCalculator() {
                 <td className="border border-gray-300 p-2">
                   {product?.PRODUCT_TITLE || ''}
                 </td>
-                {MAIN_SIZES.map(size => {
+                {MAIN_SIZES.map((size) => {
                   const sizeAvailable = mainSizes.includes(size);
                   const sizeProduct = product?.sizes[size];
                   const basePrice = product
@@ -521,7 +536,7 @@ export default function EmbroideryCalculator() {
                 })}
                 <td className="border border-gray-300 p-2">
                   {otherSizes.length > 0 ? (
-                    otherSizes.map(size => {
+                    otherSizes.map((size) => {
                       const sizeProduct = product?.sizes[size];
                       const basePrice = product
                         ? getPriceForQuantity(product, totalQuantity)
