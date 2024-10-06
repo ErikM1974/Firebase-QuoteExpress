@@ -1,77 +1,34 @@
 .embroidery-calculator {
-  width: 100%;
-  padding: 1rem;
-  background-color: #f3f4f6;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
 .embroidery-calculator h1 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
   color: #10b981;
+  text-align: center;
+  margin-bottom: 20px;
 }
 
-.embroidery-calculator table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1rem;
-  background-color: white;
-}
-
-.embroidery-calculator th,
-.embroidery-calculator td {
-  border: 1px solid #d1d5db;
-  padding: 0.5rem;
-}
-
-.embroidery-calculator th {
-  background-color: #10b981;
-  color: white;
-}
-
-.embroidery-calculator input[type="number"] {
-  width: 100%;
-  padding: 0.25rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.25rem;
-}
-
-.embroidery-calculator button {
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-  font-weight: bold;
-  cursor: pointer;
-  margin-right: 0.5rem;
-}
-
-.embroidery-calculator button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.embroidery-calculator button:last-child {
-  margin-right: 0;
-}
-
-.embroidery-calculator .error-message {
+.error-message {
   background-color: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-  padding: 0.5rem;
-  margin-bottom: 1rem;
-  border-radius: 0.25rem;
+  color: #dc2626;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 20px;
 }
 
-.embroidery-calculator .loading-spinner {
+.loading-spinner {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100px;
 }
 
-.embroidery-calculator .spinner {
+.spinner {
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  border-top: 4px solid #10b981;
   border-radius: 50%;
   width: 40px;
   height: 40px;
@@ -83,32 +40,129 @@
   100% { transform: rotate(360deg); }
 }
 
-.embroidery-calculator select {
-  width: 100%;
-  padding: 0.25rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.25rem;
-  background-color: white;
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
 }
 
-.embroidery-calculator select:disabled {
-  background-color: #e5e7eb;
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #10b981;
+  color: white;
+  font-weight: bold;
+}
+
+.style-no-column {
+  width: 200px;
+  max-width: 200px;
+}
+
+input[type="number"] {
+  width: 60px;
+  padding: 5px;
+}
+
+select {
+  width: 100%;
+  padding: 5px;
+}
+
+.price-info {
+  font-size: 0.8em;
+  color: #4b5563;
+  margin-top: 5px;
+}
+
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+button {
+  background-color: #10b981;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button:disabled {
+  background-color: #9ca3af;
   cursor: not-allowed;
 }
 
-.embroidery-calculator .react-select__control {
-  border-color: #d1d5db;
+button:hover:not(:disabled) {
+  background-color: #059669;
 }
 
-.embroidery-calculator .react-select__control--is-focused {
-  border-color: #10b981;
-  box-shadow: 0 0 0 1px #10b981;
+.totals {
+  margin-top: 20px;
+  font-weight: bold;
+  text-align: right;
 }
 
-.embroidery-calculator .react-select__option--is-selected {
-  background-color: #10b981;
+.react-select__control {
+  min-height: 38px;
 }
 
-.embroidery-calculator .react-select__option--is-focused {
-  background-color: #d1fae5;
+.react-select__value-container {
+  padding: 2px 8px;
+}
+
+.react-select__input-container {
+  margin: 0;
+  padding-bottom: 0;
+}
+
+.react-select__indicator {
+  padding: 8px;
+}
+
+.react-select__menu {
+  margin-top: 0;
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .embroidery-calculator {
+    padding: 10px;
+  }
+
+  table {
+    font-size: 14px;
+  }
+
+  th, td {
+    padding: 5px;
+  }
+
+  input[type="number"] {
+    width: 40px;
+  }
+
+  .button-container {
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
 }
