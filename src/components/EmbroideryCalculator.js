@@ -109,6 +109,59 @@ export default function EmbroideryCalculator() {
     return accessToken;
   }, [refreshToken]);
 
+  const loadStyles = useCallback(
+    debounce(async (inputValue) => {
+      console.log('Loading styles for input:', inputValue);
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+      abortController.current = new AbortController();
+
+      try {
+        const accessToken = await getAccessToken();
+        const query = `q={"STYLE_No":{"ilike":"%${inputValue}%"}}&q.select=STYLE_No&q.distinct=true&q.sort=STYLE_No`;
+        console.log('API request URL:', `${API_BASE_URL}?${query}`);
+        const response = await axios.get(`${API_BASE_URL}?${query}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal: abortController.current.signal,
+        });
+
+        console.log('API response:', response.data);
+
+        if (response.data?.Result?.length > 0) {
+          const styleOptions = response.data.Result
+            .filter((item) => item.STYLE_No && typeof item.STYLE_No === 'string')
+            .map((item) => ({
+              value: item.STYLE_No,
+              label: item.STYLE_No,
+            }));
+
+          // Remove duplicates based on value (STYLE_No)
+          const uniqueOptions = Array.from(
+            new Map(styleOptions.map((item) => [item.value, item])).values()
+          );
+
+          console.log('Unique style options:', uniqueOptions);
+          return uniqueOptions;
+        } else {
+          console.log('No styles found');
+          return [];
+        }
+      } catch (err) {
+        if (axios.isCancel(err)) {
+          console.log('Request canceled', err.message);
+        } else {
+          console.error('Error loading styles:', err);
+          setError('Failed to load styles. Please try again.');
+        }
+        return [];
+      }
+    }, 300),
+    [getAccessToken]
+  );
+
   const fetchProductDetails = useCallback(async (styleNo) => {
     try {
       const accessToken = await getAccessToken();
@@ -169,59 +222,6 @@ export default function EmbroideryCalculator() {
       setError('Failed to load product details. Please try again later.');
     }
   }, [getAccessToken]);
-
-  const loadStyles = useCallback(
-    debounce(async (inputValue) => {
-      console.log('Loading styles for input:', inputValue);
-      if (abortController.current) {
-        abortController.current.abort();
-      }
-      abortController.current = new AbortController();
-
-      try {
-        const accessToken = await getAccessToken();
-        const query = `q={"STYLE_No":{"ilike":"%${inputValue}%"}}&q.select=STYLE_No,COLOR_NAME&q.distinct=true&q.sort=STYLE_No`;
-        console.log('API request URL:', `${API_BASE_URL}?${query}`);
-        const response = await axios.get(`${API_BASE_URL}?${query}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          signal: abortController.current.signal,
-        });
-
-        console.log('API response:', response.data);
-
-        if (response.data?.Result?.length > 0) {
-          const styleOptions = response.data.Result
-            .filter((item) => item.STYLE_No && typeof item.STYLE_No === 'string')
-            .map((item) => ({
-              value: item.STYLE_No,
-              label: `${item.STYLE_No} - ${item.COLOR_NAME || 'N/A'}`,
-            }));
-
-          // Remove duplicates based on value (STYLE_No)
-          const uniqueOptions = Array.from(
-            new Map(styleOptions.map((item) => [item.value, item])).values()
-          );
-
-          console.log('Unique style options:', uniqueOptions);
-          return uniqueOptions;
-        } else {
-          console.log('No styles found');
-          return [];
-        }
-      } catch (err) {
-        if (axios.isCancel(err)) {
-          console.log('Request canceled', err.message);
-        } else {
-          console.error('Error loading styles:', err);
-          setError('Failed to load styles. Please try again.');
-        }
-        return [];
-      }
-    }, 300),
-    [getAccessToken]
-  );
 
   const getAvailableSizes = useCallback((order) => {
     const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
@@ -369,7 +369,7 @@ export default function EmbroideryCalculator() {
                     }}
                     value={
                       order.STYLE_No
-                        ? { value: order.STYLE_No, label: `${order.STYLE_No} - ${order.COLOR_NAME || 'Select Color'}` }
+                        ? { value: order.STYLE_No, label: order.STYLE_No }
                         : null
                     }
                     placeholder="Enter or select style"
@@ -402,11 +402,16 @@ export default function EmbroideryCalculator() {
                       className="w-full p-1 border rounded"
                       min="0"
                     />
+                    {product && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        ${(getPriceForQuantity(product, totalQuantity) + (product.sizes[size]?.Surcharge || 0)).toFixed(2)}
+                      </div>
+                    )}
                   </td>
                 ))}
                 <td className="border border-gray-300 p-2">
                   {otherSizes.map((size) => (
-                    <div key={size}>
+                    <div key={size} className="mb-2">
                       <span>{size}: </span>
                       <input
                         type="number"
@@ -415,6 +420,11 @@ export default function EmbroideryCalculator() {
                         className="w-20 p-1 border rounded"
                         min="0"
                       />
+                      {product && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          ${(getPriceForQuantity(product, totalQuantity) + (product.sizes[size]?.Surcharge || 0)).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </td>
