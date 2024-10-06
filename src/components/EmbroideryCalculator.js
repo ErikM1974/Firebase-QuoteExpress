@@ -113,20 +113,15 @@ export default function EmbroideryCalculator() {
       }
       abortController.current = new AbortController();
 
-      console.log('Loading styles with input:', inputValue);
-
       try {
         const accessToken = await getAccessToken();
         const query = `q={"STYLE_No":{"ilike":"%${inputValue}%"}}&q.select=STYLE_No,COLOR_NAME&q.distinct=true&q.sort=STYLE_No`;
-        console.log('Querying styles with:', query);
         const response = await axios.get(`${API_BASE_URL}?${query}`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
           signal: abortController.current.signal,
         });
-
-        console.log('Styles API response:', response.data);
 
         if (response.data?.Result?.length > 0) {
           const styleOptions = response.data.Result
@@ -141,10 +136,8 @@ export default function EmbroideryCalculator() {
             new Map(styleOptions.map((item) => [item.value, item])).values()
           );
 
-          console.log('Unique style options:', uniqueOptions);
           return uniqueOptions;
         } else {
-          console.warn('No styles found matching input:', inputValue);
           return [];
         }
       } catch (err) {
@@ -161,7 +154,6 @@ export default function EmbroideryCalculator() {
   );
 
   const fetchProductDetails = useCallback(async (styleNo) => {
-    console.log('Fetching product details for style number:', styleNo);
     try {
       const accessToken = await getAccessToken();
 
@@ -173,8 +165,6 @@ export default function EmbroideryCalculator() {
           },
         }
       );
-
-      console.log('Product details API response:', response.data);
 
       if (response.data?.Result?.length > 0) {
         const products = response.data.Result;
@@ -211,9 +201,6 @@ export default function EmbroideryCalculator() {
           colorMap[product.STYLE_No].add(product.COLOR_NAME);
         });
 
-        console.log('Color map:', colorMap);
-        console.log('Product data:', productData);
-
         setProductDatabase((prevState) => ({ ...prevState, ...productData }));
         setColors((prevColors) => ({
           ...prevColors,
@@ -229,7 +216,6 @@ export default function EmbroideryCalculator() {
           )
         );
       } else {
-        console.warn('No product details returned from the server for style number:', styleNo);
         throw new Error('No product details returned from the server');
       }
     } catch (err) {
@@ -240,7 +226,6 @@ export default function EmbroideryCalculator() {
 
   const updateOrder = useCallback(
     (index, field, value) => {
-      console.log(`Updating order at index ${index}, field ${field}, with value:`, value);
       const newOrders = [...orders];
       newOrders[index] = {
         ...newOrders[index],
@@ -267,23 +252,145 @@ export default function EmbroideryCalculator() {
         newOrders[index].error = 'Invalid style or color combination';
       }
 
-      console.log('Updated orders:', newOrders);
       setOrders(newOrders);
     },
     [orders, colors, productDatabase, fetchProductDetails]
   );
 
   const updateQuantity = (orderIndex, size, value) => {
-    console.log(`Updating quantity for order at index ${orderIndex}, size ${size}, with value:`, value);
     const newOrders = [...orders];
     const newQuantities = {
       ...newOrders[orderIndex].quantities,
       [size]: parseInt(value) || 0,
     };
     newOrders[orderIndex].quantities = newQuantities;
-    console.log('Updated orders after quantity change:', newOrders);
     setOrders(newOrders);
   };
+
+  const getAvailableSizes = useCallback((order) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return { mainSizes: [], otherSizes: [] };
+
+    const availableSizes = Object.keys(product.sizes);
+    const mainSizes = [];
+    const otherSizes = [];
+
+    availableSizes.forEach((size) => {
+      if (MAIN_SIZES.includes(size)) {
+        mainSizes.push(size);
+      } else {
+        otherSizes.push(size);
+      }
+    });
+
+    // Sort sizes based on SizeOrder if available, otherwise alphabetically
+    const sizeOrderMap = {};
+    availableSizes.forEach((size) => {
+      const sizeProduct = product.sizes[size];
+      sizeOrderMap[size] = sizeProduct?.SizeOrder || 999;
+    });
+
+    mainSizes.sort((a, b) => sizeOrderMap[a] - sizeOrderMap[b]);
+    otherSizes.sort((a, b) => sizeOrderMap[a] - sizeOrderMap[b]);
+
+    return { mainSizes, otherSizes };
+  }, [productDatabase]);
+
+  const getPriceForQuantity = useCallback((product, totalQuantity) => {
+    if (!product) return 0;
+
+    const { prices } = product;
+
+    if (totalQuantity >= 72) return parseFloat(prices.Price_72_plus) || 0;
+    if (totalQuantity >= 48) return parseFloat(prices.Price_48_71) || 0;
+    if (totalQuantity >= 24) return parseFloat(prices.Price_24_47) || 0;
+    if (totalQuantity >= 12) return parseFloat(prices.Price_12_23) || 0;
+    if (totalQuantity >= 6) return parseFloat(prices.Price_6_11) || 0;
+    return parseFloat(prices.Price_2_5) || 0;
+  }, []);
+
+  const totals = useMemo(() => {
+    const totalQuantity = orders.reduce((acc, order) => {
+      return (
+        acc +
+        Object.values(order.quantities).reduce(
+          (sum, qty) => sum + (qty || 0),
+          0
+        )
+      );
+    }, 0);
+
+    const totalPrice = orders.reduce((acc, order) => {
+      const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+      const product = productDatabase[key];
+      if (!product) return acc;
+
+      const basePrice = getPriceForQuantity(product, totalQuantity);
+
+      const orderPrice = Object.entries(order.quantities).reduce(
+        (sum, [size, qty]) => {
+          if (!qty) return sum;
+          const sizeProduct = product.sizes[size];
+          const surcharge =
+            sizeProduct && sizeProduct.Surcharge
+              ? parseFloat(sizeProduct.Surcharge) || 0
+              : 0;
+          return sum + (basePrice + surcharge) * qty;
+        },
+        0
+      );
+
+      return acc + orderPrice;
+    }, 0);
+
+    return { quantity: totalQuantity, price: totalPrice };
+  }, [orders, productDatabase, getPriceForQuantity]);
+
+  const calculateLineQuantity = useCallback((order) => {
+    return Object.values(order.quantities).reduce(
+      (sum, qty) => sum + (qty || 0),
+      0
+    );
+  }, []);
+
+  const calculateRowTotal = useCallback((order, totalQuantity) => {
+    const key = `${order.STYLE_No}-${order.COLOR_NAME}`;
+    const product = productDatabase[key];
+    if (!product) return 0;
+
+    const basePrice = getPriceForQuantity(product, totalQuantity);
+    return Object.entries(order.quantities).reduce((sum, [size, qty]) => {
+      if (!qty) return sum;
+      const sizeProduct = product.sizes[size];
+      const surcharge =
+        sizeProduct && sizeProduct.Surcharge
+          ? parseFloat(sizeProduct.Surcharge) || 0
+          : 0;
+      return sum + (basePrice + surcharge) * qty;
+    }, 0);
+  }, [productDatabase, getPriceForQuantity]);
+
+  const addNewLine = useCallback(() => {
+    setOrders((prevOrders) => [
+      ...prevOrders,
+      {
+        STYLE_No: '',
+        COLOR_NAME: '',
+        quantities: {},
+        error: null,
+      },
+    ]);
+  }, []);
+
+  const removeLine = useCallback((index) => {
+    setOrders((prevOrders) => prevOrders.filter((_, i) => i !== index));
+  }, []);
+
+  const handleSubmitOrder = useCallback(() => {
+    console.log('Submitting order:', orders);
+    alert('Order submitted successfully!');
+  }, [orders]);
 
   useEffect(() => {
     return () => {
