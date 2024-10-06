@@ -109,6 +109,67 @@ export default function EmbroideryCalculator() {
     return accessToken;
   }, [refreshToken]);
 
+  const fetchProductDetails = useCallback(async (styleNo) => {
+    try {
+      const accessToken = await getAccessToken();
+      const response = await axios.get(
+        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.data?.Result?.length > 0) {
+        const products = response.data.Result;
+        const colorMap = {};
+        const productData = {};
+
+        products.forEach((product) => {
+          const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
+          if (!productData[key]) {
+            productData[key] = {
+              PRODUCT_TITLE: product.PRODUCT_NAME || `${product.STYLE_No} - ${product.COLOR_NAME}`,
+              STYLE_No: product.STYLE_No,
+              COLOR_NAME: product.COLOR_NAME,
+              sizes: {},
+              prices: {
+                Price_2_5: product.Price_2_5,
+                Price_6_11: product.Price_6_11,
+                Price_12_23: product.Price_12_23,
+                Price_24_47: product.Price_24_47,
+                Price_48_71: product.Price_48_71,
+                Price_72_plus: product.Price_72,
+              },
+            };
+          }
+          productData[key].sizes[product.SIZE] = {
+            ...product,
+            Surcharge: parseFloat(product.Surcharge) || 0,
+            SizeOrder: parseInt(product.SizeOrder) || 999,
+          };
+
+          if (!colorMap[product.STYLE_No]) {
+            colorMap[product.STYLE_No] = new Set();
+          }
+          colorMap[product.STYLE_No].add(product.COLOR_NAME);
+        });
+
+        setProductDatabase((prevState) => ({ ...prevState, ...productData }));
+        setColors((prevColors) => ({
+          ...prevColors,
+          [styleNo]: Array.from(colorMap[styleNo] || []).sort(),
+        }));
+      } else {
+        throw new Error('No product details returned from the server');
+      }
+    } catch (err) {
+      console.error('Failed to load product details:', err);
+      setError('Failed to load product details. Please try again later.');
+    }
+  }, [getAccessToken]);
+
   const loadStyles = useCallback(
     debounce(async (inputValue) => {
       console.log('Loading styles for input:', inputValue);
@@ -216,66 +277,18 @@ export default function EmbroideryCalculator() {
     [colors, fetchProductDetails]
   );
 
-  const fetchProductDetails = useCallback(async (styleNo) => {
-    try {
-      const accessToken = await getAccessToken();
-      const response = await axios.get(
-        `${API_BASE_URL}?q={"STYLE_No":"${styleNo}"}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
+  const getPriceForQuantity = useCallback((product, totalQuantity) => {
+    if (!product) return 0;
 
-      if (response.data?.Result?.length > 0) {
-        const products = response.data.Result;
-        const colorMap = {};
-        const productData = {};
+    const { prices } = product;
 
-        products.forEach((product) => {
-          const key = `${product.STYLE_No}-${product.COLOR_NAME}`;
-          if (!productData[key]) {
-            productData[key] = {
-              PRODUCT_TITLE: product.PRODUCT_NAME || `${product.STYLE_No} - ${product.COLOR_NAME}`,
-              STYLE_No: product.STYLE_No,
-              COLOR_NAME: product.COLOR_NAME,
-              sizes: {},
-              prices: {
-                Price_2_5: product.Price_2_5,
-                Price_6_11: product.Price_6_11,
-                Price_12_23: product.Price_12_23,
-                Price_24_47: product.Price_24_47,
-                Price_48_71: product.Price_48_71,
-                Price_72_plus: product.Price_72,
-              },
-            };
-          }
-          productData[key].sizes[product.SIZE] = {
-            ...product,
-            Surcharge: parseFloat(product.Surcharge) || 0,
-            SizeOrder: parseInt(product.SizeOrder) || 999,
-          };
-
-          if (!colorMap[product.STYLE_No]) {
-            colorMap[product.STYLE_No] = new Set();
-          }
-          colorMap[product.STYLE_No].add(product.COLOR_NAME);
-        });
-
-        setProductDatabase((prevState) => ({ ...prevState, ...productData }));
-        setColors((prevColors) => ({
-          ...prevColors,
-          [styleNo]: Array.from(colorMap[styleNo] || []).sort(),
-        }));
-      } else {
-        throw new Error('No product details returned from the server');
-      }
-    } catch (err) {
-      console.error('Failed to load product details:', err);
-      setError('Failed to load product details. Please try again later.');
-    }
-  }, [getAccessToken]);
+    if (totalQuantity >= 72) return parseFloat(prices.Price_72_plus) || 0;
+    if (totalQuantity >= 48) return parseFloat(prices.Price_48_71) || 0;
+    if (totalQuantity >= 24) return parseFloat(prices.Price_24_47) || 0;
+    if (totalQuantity >= 12) return parseFloat(prices.Price_12_23) || 0;
+    if (totalQuantity >= 6) return parseFloat(prices.Price_6_11) || 0;
+    return parseFloat(prices.Price_2_5) || 0;
+  }, []);
 
   const totals = useMemo(() => {
     const totalQuantity = orders.reduce((acc, order) => {
@@ -311,20 +324,7 @@ export default function EmbroideryCalculator() {
     }, 0);
 
     return { quantity: totalQuantity, price: totalPrice };
-  }, [orders, productDatabase]);
-
-  const getPriceForQuantity = useCallback((product, totalQuantity) => {
-    if (!product) return 0;
-
-    const { prices } = product;
-
-    if (totalQuantity >= 72) return parseFloat(prices.Price_72_plus) || 0;
-    if (totalQuantity >= 48) return parseFloat(prices.Price_48_71) || 0;
-    if (totalQuantity >= 24) return parseFloat(prices.Price_24_47) || 0;
-    if (totalQuantity >= 12) return parseFloat(prices.Price_12_23) || 0;
-    if (totalQuantity >= 6) return parseFloat(prices.Price_6_11) || 0;
-    return parseFloat(prices.Price_2_5) || 0;
-  }, []);
+  }, [orders, productDatabase, getPriceForQuantity]);
 
   return (
     <div className="w-full p-4 bg-gray-100">
@@ -375,13 +375,82 @@ export default function EmbroideryCalculator() {
                     placeholder="Enter or select style"
                   />
                 </td>
-                {/* ... (rest of the table row remains unchanged) */}
+                <td className="border border-gray-300 p-2">
+                  <select
+                    value={order.COLOR_NAME}
+                    onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
+                    className="w-full p-2 border rounded"
+                    disabled={!order.STYLE_No}
+                  >
+                    <option value="">Select Color</option>
+                    {colors[order.STYLE_No]?.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="border border-gray-300 p-2">
+                  {product?.PRODUCT_TITLE || ''}
+                </td>
+                {MAIN_SIZES.map((size) => (
+                  <td key={size} className="border border-gray-300 p-2">
+                    <input
+                      type="number"
+                      value={order.quantities[size] || ''}
+                      onChange={(e) => updateOrder(index, 'quantities', { ...order.quantities, [size]: e.target.value })}
+                      className="w-full p-1 border rounded"
+                      min="0"
+                    />
+                  </td>
+                ))}
+                <td className="border border-gray-300 p-2">
+                  {otherSizes.map((size) => (
+                    <div key={size}>
+                      <span>{size}: </span>
+                      <input
+                        type="number"
+                        value={order.quantities[size] || ''}
+                        onChange={(e) => updateOrder(index, 'quantities', { ...order.quantities, [size]: e.target.value })}
+                        className="w-20 p-1 border rounded"
+                        min="0"
+                      />
+                    </div>
+                  ))}
+                </td>
+                <td className="border border-gray-300 p-2">{lineQuantity}</td>
+                <td className="border border-gray-300 p-2">
+                  ${(calculateLineQuantity(order) * (product ? getPriceForQuantity(product, totalQuantity) : 0)).toFixed(2)}
+                </td>
+                <td className="border border-gray-300 p-2">
+                  <button
+                    onClick={() => setOrders(orders.filter((_, i) => i !== index))}
+                    className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      {/* ... (rest of the component JSX remains unchanged) */}
+      <button
+        onClick={() => setOrders([...orders, { STYLE_No: '', COLOR_NAME: '', quantities: {}, error: null }])}
+        className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mr-2"
+      >
+        Add Line
+      </button>
+      <button
+        onClick={() => console.log('Submit order:', orders)}
+        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        Submit Order
+      </button>
+      <div className="mt-4">
+        <p>Total Quantity: {totals.quantity}</p>
+        <p>Total Price: ${totals.price.toFixed(2)}</p>
+      </div>
     </div>
   );
 }
