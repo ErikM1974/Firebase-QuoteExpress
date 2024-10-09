@@ -4,6 +4,16 @@ import LineItem from './LineItem';
 import OrderPDF from './OrderPDF';
 import './EmbroideryCalculator.css';
 
+const salespeople = [
+  { name: 'Taylar Hanson', email: 'taylar@nwcustomapparel.com' },
+  { name: 'Dyonii Flores', email: 'dyonii@nwcustomapparel.com' },
+  { name: 'Nika Lao', email: 'nika@nwcustomapparel.com' },
+  { name: 'Jim Mickelson', email: 'jim@nwcustomapparel.com' },
+  { name: 'Erik Mickelson', email: 'erik@nwcustomapparel.com' },
+  { name: 'Ruthie Nhoung', email: 'ruth@nwcustomapparel.com' },
+  { name: 'Other', email: '' }
+];
+
 export default function EmbroideryCalculator() {
   const [lineItems, setLineItems] = useState([]);
   const [totalGarmentQuantity, setTotalGarmentQuantity] = useState(0);
@@ -15,6 +25,9 @@ export default function EmbroideryCalculator() {
   const [customerName, setCustomerName] = useState('');
   const [quoteDate, setQuoteDate] = useState('');
   const [quoteNumber, setQuoteNumber] = useState('');
+  const [salesperson, setSalesperson] = useState(salespeople[0]);
+  const [otherSalespersonName, setOtherSalespersonName] = useState('');
+  const [otherSalespersonEmail, setOtherSalespersonEmail] = useState('');
 
   useEffect(() => {
     calculateTotals();
@@ -91,6 +104,10 @@ export default function EmbroideryCalculator() {
   };
 
   const generatePDF = async () => {
+    const selectedSalesperson = salesperson.name === 'Other' 
+      ? { name: otherSalespersonName, email: otherSalespersonEmail }
+      : salesperson;
+
     const blob = await pdf(
       <OrderPDF
         lineItems={lineItems}
@@ -100,6 +117,7 @@ export default function EmbroideryCalculator() {
         customerName={customerName}
         quoteDate={quoteDate}
         quoteNumber={quoteNumber}
+        salesperson={selectedSalesperson}
       />
     ).toBlob();
     setPdfBlob(blob);
@@ -111,6 +129,15 @@ export default function EmbroideryCalculator() {
       link.href = URL.createObjectURL(pdfBlob);
       link.download = 'embroidery_quote.pdf';
       link.click();
+    }
+  };
+
+  const handleSalespersonChange = (e) => {
+    const selected = salespeople.find(sp => sp.name === e.target.value);
+    setSalesperson(selected);
+    if (selected.name !== 'Other') {
+      setOtherSalespersonName('');
+      setOtherSalespersonEmail('');
     }
   };
 
@@ -132,6 +159,37 @@ export default function EmbroideryCalculator() {
           <p>2025 Freeman Road East, Milton, WA 98354</p>
           <p>Phone: 253-922-5793</p>
           <p>Website: www.nwcustomapparel.com</p>
+        </div>
+        <div className="p-4 bg-blue-100">
+          <label htmlFor="salesperson" className="block text-sm font-medium text-gray-700">Salesperson</label>
+          <select
+            id="salesperson"
+            value={salesperson.name}
+            onChange={handleSalespersonChange}
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+          >
+            {salespeople.map((sp) => (
+              <option key={sp.name} value={sp.name}>{sp.name}</option>
+            ))}
+          </select>
+          {salesperson.name === 'Other' && (
+            <div className="mt-2">
+              <input
+                type="text"
+                placeholder="Other Salesperson Name"
+                value={otherSalespersonName}
+                onChange={(e) => setOtherSalespersonName(e.target.value)}
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              />
+              <input
+                type="email"
+                placeholder="Other Salesperson Email"
+                value={otherSalespersonEmail}
+                onChange={(e) => setOtherSalespersonEmail(e.target.value)}
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              />
+            </div>
+          )}
         </div>
         <div className="p-4">
           {lineItems.map((item, index) => (
@@ -204,6 +262,7 @@ export default function EmbroideryCalculator() {
             <p>Customer Name: {customerName}</p>
             <p>Quote Date: {quoteDate}</p>
             <p>Quote Number: {quoteNumber}</p>
+            <p>Salesperson: {salesperson.name === 'Other' ? otherSalespersonName : salesperson.name}</p>
           </div>
         )}
       </div>

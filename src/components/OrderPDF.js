@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
 
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 
-const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPrice, customerName, quoteDate, quoteNumber }) => {
+const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPrice, customerName, quoteDate, quoteNumber, salesperson }) => {
   const subtotal = totalPrice || 0;
   const salesTax = subtotal * 0.101; // 10.1% sales tax
   const total = subtotal + salesTax;
@@ -153,6 +153,8 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
           <Text style={styles.quoteInfoItem}>Customer Name: {customerName}</Text>
           <Text style={styles.quoteInfoItem}>Quote Date: {formatDate(quoteDateObj)}</Text>
           <Text style={styles.quoteInfoItem}>Quote Number: {quoteNumber}</Text>
+          <Text style={styles.quoteInfoItem}>Salesperson: {salesperson.name}</Text>
+          <Text style={styles.quoteInfoItem}>Salesperson Email: {salesperson.email}</Text>
           <Text style={styles.quoteInfoItem}>Quote is Good for 30 Days</Text>
           <Text style={styles.quoteInfoItem}>Expiration Date: {formatDate(expirationDate)}</Text>
         </View>
