@@ -147,7 +147,7 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
         </View>
         
         {lineItems.map((item, index) => (
-          <View key={index} style={styles.lineItem}>
+          <View key={index} style={styles.lineItem} wrap={false}>
             <Text style={styles.lineItemHeader}>{item.productTitle}</Text>
             <Text style={styles.lineItemDetails}>Style: {item.styleNo}</Text>
             <Text style={styles.lineItemDetails}>Color: {item.colorName}</Text>
@@ -159,7 +159,7 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
           </View>
         ))}
 
-        <View style={styles.summary}>
+        <View style={styles.summary} wrap={false}>
           <Text>Total Garment Quantity: {totalGarmentQuantity}</Text>
           <Text>Total Cap Quantity: {totalCapQuantity}</Text>
           <Text>Subtotal: ${subtotal.toFixed(2)}</Text>
