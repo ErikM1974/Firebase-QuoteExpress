@@ -1,414 +1,285 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import {
+  collection,
+  getDocs,
+  query,
+  limit,
+  orderBy,
+  startAt,
+  endAt,
+} from 'firebase/firestore';
 import AsyncSelect from 'react-select/async';
-import debounce from 'lodash/debounce';
 import './EmbroideryCalculator.css';
 
-const API_BASE_URL = 'https://c3eku948.caspio.com/rest/v2/views/Heroku/records';
-const MAIN_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
-const LARGE_SIZES = ['2XL', '3XL', '4XL', '5XL', '6XL'];
-
-const LoadingSpinner = () => (
-  <div className="loading-spinner">
-    <div className="spinner"></div>
-  </div>
-);
-
-const getPriceForQuantity = (product, totalQuantity) => {
-  console.log('Calculating price for quantity:', totalQuantity);
-  if (totalQuantity >= 72) return parseFloat(product.Price_72_plus) || 0;
-  if (totalQuantity >= 48) return parseFloat(product.Price_48_71) || 0;
-  if (totalQuantity >= 24) return parseFloat(product.Price_24_47) || 0;
-  if (totalQuantity >= 12) return parseFloat(product.Price_12_23) || 0;
-  if (totalQuantity >= 6) return parseFloat(product.Price_6_11) || 0;
-  return parseFloat(product.Price_2_5) || 0;
-};
-
 export default function EmbroideryCalculator() {
-  const [productDatabase, setProductDatabase] = useState({});
-  const [orders, setOrders] = useState([
-    {
-      STYLE_No: '',
-      COLOR_NAME: '',
-      quantities: {},
-      error: null,
-    },
-  ]);
-  const [colors, setColors] = useState({});
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const abortController = React.useRef(null);
+  const [order, setOrder] = useState({
+    styleNo: '',
+    colorName: '',
+    productTitle: '',
+    productData: null,
+    quantities: {},
+  });
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    console.log('Client ID:', process.env.REACT_APP_CASPIO_CLIENT_ID.substring(0, 5) + '...');
-    console.log('Client Secret:', process.env.REACT_APP_CASPIO_CLIENT_SECRET.substring(0, 5) + '...');
+    if (!db) {
+      console.error('Firestore db is not initialized');
+      setErrorMessage('Firebase initialization failed. Please check your configuration.');
+    }
   }, []);
 
-  const refreshToken = useCallback(async () => {
+  // Function to load style options asynchronously
+  const loadStyleOptions = async (inputValue) => {
+    console.log('loadStyleOptions called with:', inputValue);
     try {
-      console.log('Refreshing token...');
-      const response = await axios.post(
-        'https://c3eku948.caspio.com/oauth/token',
-        new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: process.env.REACT_APP_CASPIO_CLIENT_ID,
-          client_secret: process.env.REACT_APP_CASPIO_CLIENT_SECRET,
-        }).toString(),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        }
+      if (!inputValue) {
+        console.log('No input value, returning empty array');
+        return [];
+      }
+
+      const searchTerm = inputValue.toUpperCase();
+      const stylesRef = collection(db, 'styles');
+
+      const styleQuery = query(
+        stylesRef,
+        orderBy('styleNo'),
+        startAt(searchTerm),
+        endAt(searchTerm + '\uf8ff'),
+        limit(20)
       );
 
-      const newAccessToken = response.data.access_token;
-      const expiresIn = response.data.expires_in || 3600;
+      console.log('Executing Firestore query');
+      const querySnapshot = await getDocs(styleQuery);
+      console.log('Query snapshot:', querySnapshot);
 
-      localStorage.setItem('caspioAccessToken', newAccessToken);
-      console.log('Token refreshed successfully');
-
-      return { newAccessToken, expiresIn };
-    } catch (error) {
-      console.error('Failed to refresh access token:', error);
-      throw error;
-    }
-  }, []);
-
-  const getAccessToken = useCallback(async () => {
-    let accessToken = localStorage.getItem('caspioAccessToken');
-
-    if (!accessToken) {
-      console.log('No token found, refreshing...');
-      const { newAccessToken } = await refreshToken();
-      accessToken = newAccessToken;
-    }
-
-    console.log('Using access token:', accessToken.substring(0, 5) + '...');
-    return accessToken;
-  }, [refreshToken]);
-
-  const fetchStyles = useCallback(
-    debounce(async (inputValue, callback) => {
-      if (!inputValue) {
-        callback([]);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const accessToken = await getAccessToken();
-        const queryObject = {
-          STYLE_No: { like: `%${inputValue}%` },
+      const loadedStyles = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        console.log('Document data:', data);
+        return {
+          value: doc.id,
+          label: data.styleNo,
+          data: data,
         };
-        const query = `q=${encodeURIComponent(JSON.stringify(queryObject))}&q.select=STYLE_No&q.distinct=true&q.sort=STYLE_No&q.limit=50`;
-        console.log('Fetching styles with query:', query);
-        const response = await axios.get(`${API_BASE_URL}?${query}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
+      });
 
-        const results = response.data?.Result || [];
-        const options = results.map((item) => ({
-          label: item.STYLE_No,
-          value: item.STYLE_No,
-        }));
-        callback(options);
-      } catch (err) {
-        console.error('Error fetching styles:', err);
-        setErrorMessage('Failed to load styles. Please try again.');
-        callback([]);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500),
-    [getAccessToken]
-  );
+      console.log('Loaded styles:', loadedStyles);
+      return loadedStyles;
+    } catch (err) {
+      console.error('Error loading styles:', err);
+      setErrorMessage(`Error loading styles: ${err.message}`);
+      return [];
+    }
+  };
 
-  const fetchColors = useCallback(async (styleNo) => {
-    if (!styleNo) return;
-
-    setIsLoading(true);
-    try {
-      console.log(`Fetching colors for style: ${styleNo}`);
-      const accessToken = await getAccessToken();
-      let offset = 0;
-      const limit = 1000;
-      let hasMore = true;
-      const colorSet = new Set();
-      const productDetails = {};
-
-      while (hasMore) {
-        const queryObject = {
-          STYLE_No: styleNo,
-        };
-        const query = `q=${encodeURIComponent(JSON.stringify(queryObject))}&q.select=COLOR_NAME,PRODUCT_TITLE,Price_2_5,Price_6_11,Price_12_23,Price_24_47,Price_48_71,Price_72_plus,Surcharge,Size&q.sort=COLOR_NAME,Size&q.limit=${limit}&q.offset=${offset}`;
-        console.log('Fetching colors with query:', query);
-        const response = await axios.get(`${API_BASE_URL}?${query}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        const results = response.data?.Result || [];
-        results.forEach((item) => {
-          if (item.COLOR_NAME) colorSet.add(item.COLOR_NAME);
-          if (!productDetails[item.COLOR_NAME]) {
-            productDetails[item.COLOR_NAME] = {
-              PRODUCT_TITLE: item.PRODUCT_TITLE,
-              Price_2_5: item.Price_2_5,
-              Price_6_11: item.Price_6_11,
-              Price_12_23: item.Price_12_23,
-              Price_24_47: item.Price_24_47,
-              Price_48_71: item.Price_48_71,
-              Price_72_plus: item.Price_72_plus,
-              Surcharge: item.Surcharge,
-              sizes: {},
-            };
-          }
-          productDetails[item.COLOR_NAME].sizes[item.Size] = {
-            ...item,
-          };
-        });
-
-        if (results.length < limit) {
-          hasMore = false;
-        } else {
-          offset += limit;
-        }
-      }
-
-      setColors((prevColors) => ({
-        ...prevColors,
-        [styleNo]: Array.from(colorSet),
+  // Handle selection of a style
+  const handleStyleSelect = (selectedOption) => {
+    console.log('Selected option:', selectedOption);
+    if (!selectedOption) {
+      setOrder((prevOrder) => ({
+        ...prevOrder,
+        styleNo: '',
+        productTitle: '',
+        productData: null,
+        colorName: '',
+        quantities: {},
       }));
+      return;
+    }
 
-      setProductDatabase((prevDatabase) => ({
-        ...prevDatabase,
-        [styleNo]: {
-          colors: productDetails,
+    const styleData = selectedOption.data;
+    setOrder((prevOrder) => ({
+      ...prevOrder,
+      styleNo: styleData.styleNo,
+      productTitle: styleData.productTitle,
+      productData: styleData,
+      colorName: '',
+      quantities: {},
+    }));
+  };
+
+  const handleColorSelect = (color) => {
+    setOrder((prevOrder) => ({
+      ...prevOrder,
+      colorName: color,
+    }));
+  };
+
+  const handleQuantityChange = (size, quantity) => {
+    const qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty < 0) {
+      setOrder((prevOrder) => {
+        const newQuantities = { ...prevOrder.quantities };
+        delete newQuantities[size];
+        return {
+          ...prevOrder,
+          quantities: newQuantities,
+        };
+      });
+    } else {
+      setOrder((prevOrder) => ({
+        ...prevOrder,
+        quantities: {
+          ...prevOrder.quantities,
+          [size]: qty,
         },
       }));
-
-      console.log('Fetched colors for style:', styleNo, Array.from(colorSet));
-    } catch (err) {
-      console.error('Error fetching colors:', err);
-      setErrorMessage('Failed to load color options. Please try again later.');
-    } finally {
-      setIsLoading(false);
     }
-  }, [getAccessToken]);
+  };
 
-  const updateOrder = useCallback(
-    (index, field, value) => {
-      console.log(`Updating order ${index}, field: ${field}, value:`, value);
-      setOrders((prevOrders) => {
-        const newOrders = [...prevOrders];
-        newOrders[index] = {
-          ...newOrders[index],
-          [field]: value,
-          error: null,
-        };
+  const validateForm = () => {
+    if (!order.styleNo) {
+      setErrorMessage('Please select a style');
+      return false;
+    }
+    if (!order.colorName) {
+      setErrorMessage('Please select a color');
+      return false;
+    }
+    const totalQuantity = Object.values(order.quantities).reduce((sum, qty) => sum + qty, 0);
+    if (totalQuantity === 0) {
+      setErrorMessage('Please enter at least one quantity');
+      return false;
+    }
+    setErrorMessage('');
+    return true;
+  };
 
-        if (field === 'STYLE_No') {
-          newOrders[index].COLOR_NAME = '';
-          newOrders[index].quantities = {};
-          if (value && !colors[value]) {
-            fetchColors(value);
-          }
-        } else if (field === 'COLOR_NAME') {
-          newOrders[index].quantities = {};
-        }
-
-        console.log('Updated orders:', newOrders);
-        return newOrders;
-      });
-    },
-    [colors, fetchColors]
-  );
-
-  const calculateOrderTotals = useCallback(() => {
-    console.log('Calculating order totals...');
-    const totalQuantity = orders.reduce((acc, order) => {
-      return acc + Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
-    }, 0);
-
-    let totalPrice = 0;
-
-    orders.forEach((order) => {
-      const productColors = productDatabase[order.STYLE_No]?.colors;
-      const colorDetails = productColors?.[order.COLOR_NAME];
-      if (!colorDetails) return;
-
-      const basePrice = getPriceForQuantity(colorDetails, totalQuantity);
-
-      Object.entries(order.quantities).forEach(([size, qty]) => {
-        if (!qty) return;
-        const sizeDetails = colorDetails.sizes[size];
-        if (!sizeDetails) return;
-
-        const surcharge = LARGE_SIZES.includes(size) ? parseFloat(colorDetails.Surcharge) || 0 : 0;
-        totalPrice += (basePrice + surcharge) * qty;
-      });
-    });
-
-    console.log('Total quantity:', totalQuantity, 'Total price:', totalPrice);
-    return { quantity: totalQuantity, price: totalPrice };
-  }, [orders, productDatabase]);
-
-  const totals = useMemo(() => calculateOrderTotals(), [calculateOrderTotals]);
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+    console.log('Order submitted:', order);
+    // Implement your submission logic here
+    try {
+      // Example: Add order to Firestore
+      // await addDoc(collection(db, 'orders'), order);
+      // Reset form after submission
+      // setOrder({ styleNo: '', colorName: '', productTitle: '', productData: null, quantities: {} });
+      // alert('Order submitted successfully!');
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      setErrorMessage(`Error submitting order: ${error.message}`);
+    }
+  };
 
   return (
-    <div className="embroidery-calculator">
-      <h1>Embroidery Order Form</h1>
-      {errorMessage && (
-        <div className="error-message" role="alert">
-          <strong>Error: </strong>
-          <span>{errorMessage}</span>
-        </div>
-      )}
-      {isLoading && <LoadingSpinner />}
-      <table>
-        <thead>
-          <tr>
-            <th>Style No</th>
-            <th>Color Name</th>
-            <th>Product Title</th>
-            {MAIN_SIZES.map((size) => (
-              <th key={size}>{size}</th>
-            ))}
-            <th>Other Sizes</th>
-            <th>Line Qty</th>
-            <th>Row Total</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((order, index) => {
-            const productColors = productDatabase[order.STYLE_No]?.colors;
-            const colorDetails = productColors?.[order.COLOR_NAME];
-            const productTitle = colorDetails?.PRODUCT_TITLE || '';
-            const sizesAvailable = colorDetails ? Object.keys(colorDetails.sizes) : [];
-            const mainSizesAvailable = sizesAvailable.filter((size) => MAIN_SIZES.includes(size));
-            const otherSizesAvailable = sizesAvailable.filter((size) => !MAIN_SIZES.includes(size));
+    <div className="bg-gray-100 min-h-screen p-4">
+      <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+        <h1 className="text-2xl font-bold text-green-600 p-4 bg-green-100">
+          Embroidery Order Form
+        </h1>
+        {errorMessage && (
+          <div
+            className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-4"
+            role="alert"
+          >
+            <p className="font-bold">Error</p>
+            <p>{errorMessage}</p>
+          </div>
+        )}
+        <div className="p-4">
+          <div className="flex flex-wrap space-x-4">
+            {/* Style Number Input */}
+            <div className="w-full md:w-1/3 relative">
+              <label className="block text-sm font-medium text-gray-700">Style</label>
+              <AsyncSelect
+                className="mt-1"
+                classNamePrefix="select"
+                isClearable
+                isSearchable
+                name="style"
+                loadOptions={loadStyleOptions}
+                onChange={handleStyleSelect}
+                placeholder="Search styles..."
+                noOptionsMessage={() => 'No styles found'}
+                loadingMessage={() => 'Loading...'}
+                cacheOptions
+                defaultOptions
+              />
+            </div>
 
-            const lineQuantity = Object.values(order.quantities).reduce((sum, qty) => sum + (qty || 0), 0);
-
-            const lineTotal = Object.entries(order.quantities).reduce((sum, [size, qty]) => {
-              if (!qty) return sum;
-              const sizeDetails = colorDetails?.sizes[size];
-              if (!sizeDetails) return sum;
-
-              const basePrice = getPriceForQuantity(colorDetails, totals.quantity);
-              const surcharge = LARGE_SIZES.includes(size) ? parseFloat(colorDetails.Surcharge) || 0 : 0;
-              return sum + (basePrice + surcharge) * qty;
-            }, 0);
-
-            return (
-              <tr key={index}>
-                <td>
-                  <AsyncSelect
-                    cacheOptions
-                    loadOptions={fetchStyles}
-                    onChange={(selectedOption) => {
-                      const value = selectedOption ? selectedOption.value : '';
-                      updateOrder(index, 'STYLE_No', value);
-                    }}
-                    value={
-                      order.STYLE_No
-                        ? { value: order.STYLE_No, label: order.STYLE_No }
-                        : null
-                    }
-                    placeholder="Enter or select style"
-                    isDisabled={isLoading}
-                  />
-                </td>
-                <td>
-                  <select
-                    value={order.COLOR_NAME}
-                    onChange={(e) => updateOrder(index, 'COLOR_NAME', e.target.value)}
-                    disabled={!order.STYLE_No || isLoading}
-                  >
-                    <option value="">Select Color</option>
-                    {colors[order.STYLE_No]?.map((color) => (
-                      <option key={color} value={color}>
-                        {color}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>{productTitle}</td>
-                {MAIN_SIZES.map((size) => (
-                  <td key={size} className={LARGE_SIZES.includes(size) ? 'highlight-large-size' : ''}>
-                    {colorDetails?.sizes[size] ? (
-                      <div>
-                        <input
-                          type="number"
-                          value={order.quantities[size] || ''}
-                          onChange={(e) =>
-                            updateOrder(index, 'quantities', {
-                              ...order.quantities,
-                              [size]: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          min="0"
-                          disabled={isLoading}
-                        />
-                        <div className="price-info">
-                          {colorDetails ? `$${(getPriceForQuantity(colorDetails, totals.quantity) + (LARGE_SIZES.includes(size) ? parseFloat(colorDetails.Surcharge) || 0 : 0)).toFixed(2)}` : ''}
-                        </div>
-                      </div>
-                    ) : (
-                      'N/A'
-                    )}
-                  </td>
-                ))}
-                <td>
-                  {otherSizesAvailable.map((size) => (
-                    <div key={size}>
-                      <span>{size}: </span>
-                      <input
-                        type="number"
-                        value={order.quantities[size] || ''}
-                        onChange={(e) =>
-                          updateOrder(index, 'quantities', {
-                            ...order.quantities,
-                            [size]: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        min="0"
-                        disabled={isLoading}
-                      />
-                    </div>
+            {/* Color Selection */}
+            <div className="w-full md:w-1/3 mt-4 md:mt-0">
+              <label className="block text-sm font-medium text-gray-700">Color</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                onChange={(e) => handleColorSelect(e.target.value)}
+                value={order.colorName}
+                disabled={!order.productData || !order.productData.colors}
+                aria-label="Select color"
+              >
+                <option value="">Select Color</option>
+                {order.productData &&
+                  order.productData.colors &&
+                  order.productData.colors.map((color, index) => (
+                    <option key={index} value={color}>
+                      {color}
+                    </option>
                   ))}
-                </td>
-                <td>{lineQuantity}</td>
-                <td>${lineTotal.toFixed(2)}</td>
-                <td>
-                  <button onClick={() => setOrders(orders.filter((_, i) => i !== index))} disabled={isLoading}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <button
-        onClick={() =>
-          setOrders([...orders, { STYLE_No: '', COLOR_NAME: '', quantities: {}, error: null }])
-        }
-        disabled={isLoading}
-      >
-        Add Line
-      </button>
-      <button onClick={() => console.log('Submit order:', orders)} disabled={isLoading}>
-        Submit Order
-      </button>
-      <div>
-        <p>Total Quantity: {totals.quantity}</p>
-        <p>Total Price: ${totals.price.toFixed(2)}</p>
+              </select>
+            </div>
+
+            {/* Product Description */}
+            <div className="w-full md:w-1/3 mt-4 md:mt-0">
+              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <p className="mt-1">
+                {order.productTitle || 'Product description will appear here.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Sizing Matrix */}
+          {order.productData && order.productData.sizes && (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Sizing Matrix</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white">
+                  <thead>
+                    <tr>
+                      {order.productData.sizes.map((size) => (
+                        <th
+                          key={size}
+                          className="px-4 py-2 border-b-2 border-gray-200 bg-gray-100 text-center text-xs leading-4 font-medium text-gray-700 uppercase tracking-wider"
+                        >
+                          {size}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {order.productData.sizes.map((size) => (
+                        <td key={size} className="px-4 py-2 border-b border-gray-200 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={order.quantities[size] || ''}
+                            onChange={(e) => handleQuantityChange(size, e.target.value)}
+                            className="mt-1 block w-16 mx-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                            aria-label={`Quantity for size ${size}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <div className="mt-4">
+            <button
+              type="button"
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none disabled:opacity-50"
+              onClick={handleSubmit}
+              disabled={!order.styleNo || !order.colorName}
+            >
+              Submit Order
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
