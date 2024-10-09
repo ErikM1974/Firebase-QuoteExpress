@@ -23,6 +23,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
     totalQuantity: 0,
     price: 0,
     subtotal: 0,
+    isCap: false,
   });
 
   useEffect(() => {
@@ -72,11 +73,13 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
         totalQuantity: 0,
         price: 0,
         subtotal: 0,
+        isCap: false,
       }));
       return;
     }
 
     const styleData = selectedOption.data;
+    const isCap = styleData.productTitle.toLowerCase().includes('cap');
     setItem((prevItem) => ({
       ...prevItem,
       styleNo: styleData.styleNo,
@@ -87,6 +90,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       totalQuantity: 0,
       price: 0,
       subtotal: 0,
+      isCap: isCap,
     }));
   };
 
@@ -104,7 +108,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
         const newQuantities = { ...prevItem.quantities };
         delete newQuantities[size];
         const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
-        onQuantityChange(newTotalQuantity, prevItem.productData?.cap_NoCap === 'Cap');
+        onQuantityChange(newTotalQuantity, prevItem.isCap);
         return {
           ...prevItem,
           quantities: newQuantities,
@@ -118,7 +122,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
           [size]: qty,
         };
         const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
-        onQuantityChange(newTotalQuantity, prevItem.productData?.cap_NoCap === 'Cap');
+        onQuantityChange(newTotalQuantity, prevItem.isCap);
         return {
           ...prevItem,
           quantities: newQuantities,
@@ -135,11 +139,11 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       return;
     }
 
-    const { basePrice, capPrices, cap_NoCap, sizeUpcharges } = item.productData;
-    const totalQuantity = cap_NoCap === 'Cap' ? totalCapQuantity : totalGarmentQuantity;
+    const { basePrice, capPrices, sizeUpcharges } = item.productData;
+    const totalQuantity = item.isCap ? totalCapQuantity : totalGarmentQuantity;
     
     let baseItemPrice;
-    if (cap_NoCap === 'Cap') {
+    if (item.isCap) {
       if (totalQuantity >= 144) baseItemPrice = parseFloat(capPrices['144_plus']);
       else if (totalQuantity >= 24) baseItemPrice = parseFloat(capPrices['24_143']);
       else baseItemPrice = parseFloat(capPrices['2_23']);

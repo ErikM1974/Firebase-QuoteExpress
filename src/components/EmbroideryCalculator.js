@@ -24,13 +24,15 @@ export default function EmbroideryCalculator() {
   const handleQuantityChange = (index, newTotalQuantity, isCap) => {
     const newLineItems = [...lineItems];
     const oldQuantity = newLineItems[index].totalQuantity || 0;
+    const quantityDifference = newTotalQuantity - oldQuantity;
+
     newLineItems[index] = { ...newLineItems[index], totalQuantity: newTotalQuantity };
     setLineItems(newLineItems);
 
     if (isCap) {
-      setTotalCapQuantity(prev => prev - oldQuantity + newTotalQuantity);
+      setTotalCapQuantity(prev => prev + quantityDifference);
     } else {
-      setTotalGarmentQuantity(prev => prev - oldQuantity + newTotalQuantity);
+      setTotalGarmentQuantity(prev => prev + quantityDifference);
     }
   };
 
