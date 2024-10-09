@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LineItem from './LineItem';
 import './EmbroideryCalculator.css';
 
 export default function EmbroideryCalculator() {
   const [lineItems, setLineItems] = useState([]);
-  const [totalQuantity, setTotalQuantity] = useState(0);
+  const [totalGarmentQuantity, setTotalGarmentQuantity] = useState(0);
+  const [totalCapQuantity, setTotalCapQuantity] = useState(0);
+  const [totalPrice, setTotalPrice] = useState(0);
+
+  useEffect(() => {
+    calculateTotals();
+  }, [lineItems]);
 
   const addLineItem = () => {
     setLineItems([...lineItems, {}]);
@@ -13,22 +19,39 @@ export default function EmbroideryCalculator() {
   const removeLineItem = (index) => {
     const newLineItems = lineItems.filter((_, i) => i !== index);
     setLineItems(newLineItems);
-    calculateTotalQuantity(newLineItems);
   };
 
-  const handleQuantityChange = (index, quantities) => {
+  const handleQuantityChange = (index, newTotalQuantity, isCap) => {
     const newLineItems = [...lineItems];
-    newLineItems[index] = { ...newLineItems[index], quantities };
+    const oldQuantity = newLineItems[index].totalQuantity || 0;
+    newLineItems[index] = { ...newLineItems[index], totalQuantity: newTotalQuantity };
     setLineItems(newLineItems);
-    calculateTotalQuantity(newLineItems);
+
+    if (isCap) {
+      setTotalCapQuantity(prev => prev - oldQuantity + newTotalQuantity);
+    } else {
+      setTotalGarmentQuantity(prev => prev - oldQuantity + newTotalQuantity);
+    }
   };
 
-  const calculateTotalQuantity = (items) => {
-    const total = items.reduce((sum, item) => {
-      const itemTotal = Object.values(item.quantities || {}).reduce((a, b) => a + b, 0);
-      return sum + itemTotal;
-    }, 0);
-    setTotalQuantity(total);
+  const handlePriceChange = (index, price) => {
+    const newLineItems = [...lineItems];
+    newLineItems[index] = { ...newLineItems[index], price };
+    setLineItems(newLineItems);
+  };
+
+  const calculateTotals = () => {
+    let totalPrice = 0;
+
+    lineItems.forEach(item => {
+      totalPrice += item.price || 0;
+    });
+
+    setTotalPrice(totalPrice);
+  };
+
+  const isOrderValid = () => {
+    return (totalGarmentQuantity >= 6 || totalCapQuantity >= 2) && lineItems.length > 0;
   };
 
   return (
@@ -38,11 +61,14 @@ export default function EmbroideryCalculator() {
           Embroidery Order Form
         </h1>
         <div className="p-4">
-          {lineItems.map((_, index) => (
+          {lineItems.map((item, index) => (
             <LineItem
               key={index}
               onRemove={() => removeLineItem(index)}
-              onQuantityChange={(quantities) => handleQuantityChange(index, quantities)}
+              onQuantityChange={(newTotalQuantity, isCap) => handleQuantityChange(index, newTotalQuantity, isCap)}
+              onPriceChange={(price) => handlePriceChange(index, price)}
+              totalGarmentQuantity={totalGarmentQuantity}
+              totalCapQuantity={totalCapQuantity}
             />
           ))}
           <button
@@ -53,7 +79,15 @@ export default function EmbroideryCalculator() {
           </button>
         </div>
         <div className="p-4 bg-gray-200">
-          <h2 className="text-xl font-bold">Total Quantity: {totalQuantity}</h2>
+          <h2 className="text-xl font-bold">Order Summary</h2>
+          <p>Total Garment Quantity: {totalGarmentQuantity}</p>
+          <p>Total Cap Quantity: {totalCapQuantity}</p>
+          <p>Total Price: ${totalPrice.toFixed(2)}</p>
+          {!isOrderValid() && (
+            <p className="text-red-500">
+              Minimum order: 6 garments or 2 caps
+            </p>
+          )}
         </div>
       </div>
     </div>

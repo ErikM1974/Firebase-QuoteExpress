@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import {
   collection,
@@ -11,16 +11,23 @@ import {
 } from 'firebase/firestore';
 import AsyncSelect from 'react-select/async';
 
-const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
-export default function LineItem({ onRemove, onQuantityChange }) {
+export default function LineItem({ onRemove, onQuantityChange, onPriceChange, totalGarmentQuantity, totalCapQuantity }) {
   const [item, setItem] = useState({
     styleNo: '',
     colorName: '',
     productTitle: '',
     productData: null,
     quantities: {},
+    totalQuantity: 0,
+    price: 0,
+    subtotal: 0,
   });
+
+  useEffect(() => {
+    calculatePrice();
+  }, [item.quantities, item.productData, totalGarmentQuantity, totalCapQuantity]);
 
   const loadStyleOptions = async (inputValue) => {
     try {
@@ -62,6 +69,9 @@ export default function LineItem({ onRemove, onQuantityChange }) {
         productData: null,
         colorName: '',
         quantities: {},
+        totalQuantity: 0,
+        price: 0,
+        subtotal: 0,
       }));
       return;
     }
@@ -74,6 +84,9 @@ export default function LineItem({ onRemove, onQuantityChange }) {
       productData: styleData,
       colorName: '',
       quantities: {},
+      totalQuantity: 0,
+      price: 0,
+      subtotal: 0,
     }));
   };
 
@@ -90,9 +103,12 @@ export default function LineItem({ onRemove, onQuantityChange }) {
       setItem((prevItem) => {
         const newQuantities = { ...prevItem.quantities };
         delete newQuantities[size];
+        const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
+        onQuantityChange(newTotalQuantity, prevItem.productData?.cap_NoCap === 'Cap');
         return {
           ...prevItem,
           quantities: newQuantities,
+          totalQuantity: newTotalQuantity,
         };
       });
     } else {
@@ -101,13 +117,56 @@ export default function LineItem({ onRemove, onQuantityChange }) {
           ...prevItem.quantities,
           [size]: qty,
         };
-        onQuantityChange(newQuantities);
+        const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
+        onQuantityChange(newTotalQuantity, prevItem.productData?.cap_NoCap === 'Cap');
         return {
           ...prevItem,
           quantities: newQuantities,
+          totalQuantity: newTotalQuantity,
         };
       });
     }
+  };
+
+  const calculatePrice = () => {
+    if (!item.productData || item.totalQuantity === 0) {
+      setItem((prevItem) => ({ ...prevItem, price: 0, subtotal: 0 }));
+      onPriceChange(0);
+      return;
+    }
+
+    const { basePrice, capPrices, cap_NoCap, sizeUpcharges } = item.productData;
+    const totalQuantity = cap_NoCap === 'Cap' ? totalCapQuantity : totalGarmentQuantity;
+    
+    let baseItemPrice;
+    if (cap_NoCap === 'Cap') {
+      if (totalQuantity >= 144) baseItemPrice = parseFloat(capPrices['144_plus']);
+      else if (totalQuantity >= 24) baseItemPrice = parseFloat(capPrices['24_143']);
+      else baseItemPrice = parseFloat(capPrices['2_23']);
+    } else {
+      if (totalQuantity >= 72) baseItemPrice = basePrice['72_plus'];
+      else if (totalQuantity >= 48) baseItemPrice = basePrice['48_71'];
+      else if (totalQuantity >= 24) baseItemPrice = basePrice['24_47'];
+      else if (totalQuantity >= 12) baseItemPrice = basePrice['12_23'];
+      else if (totalQuantity >= 6) baseItemPrice = basePrice['6_11'];
+      else baseItemPrice = basePrice['2_5'];
+    }
+
+    let subtotal = 0;
+    for (const [size, quantity] of Object.entries(item.quantities)) {
+      let itemPrice = baseItemPrice;
+      if (sizeUpcharges && sizeUpcharges[size]) {
+        itemPrice += sizeUpcharges[size];
+      }
+      subtotal += itemPrice * quantity;
+    }
+
+    setItem((prevItem) => ({ 
+      ...prevItem, 
+      price: baseItemPrice,
+      subtotal: subtotal
+    }));
+    onPriceChange(subtotal);
   };
 
   const renderSizingMatrix = () => {
@@ -147,6 +206,11 @@ export default function LineItem({ onRemove, onQuantityChange }) {
                       className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                       aria-label={`Quantity for size ${size}`}
                     />
+                    {item.quantities[size] > 0 && (
+                      <div className="text-xs mt-1">
+                        ${(item.price + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
+                      </div>
+                    )}
                   </td>
                 ))}
                 {otherSizes.length > 0 && (
@@ -163,6 +227,11 @@ export default function LineItem({ onRemove, onQuantityChange }) {
                             className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                             aria-label={`Quantity for size ${size}`}
                           />
+                          {item.quantities[size] > 0 && (
+                            <div className="text-xs ml-1">
+                              ${(item.price + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -225,6 +294,10 @@ export default function LineItem({ onRemove, onQuantityChange }) {
         </div>
       </div>
       {renderSizingMatrix()}
+      <div className="mt-2 text-right">
+        <p className="text-sm font-bold">Total Quantity: {item.totalQuantity}</p>
+        <p className="text-sm font-bold">Subtotal: ${item.subtotal.toFixed(2)}</p>
+      </div>
     </div>
   );
 }
