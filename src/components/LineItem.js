@@ -19,11 +19,65 @@ export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantit
   }, [item, totalGarmentQuantity, totalCapQuantity]);
 
   const loadStyleOptions = async (inputValue) => {
-    // ... (existing code)
+    try {
+      if (!inputValue) return [];
+
+      const searchTerm = inputValue.toUpperCase();
+      const stylesRef = collection(db, 'styles');
+
+      const styleQuery = query(
+        stylesRef,
+        orderBy('styleNo'),
+        startAt(searchTerm),
+        endAt(searchTerm + '\uf8ff'),
+        limit(20)
+      );
+
+      const querySnapshot = await getDocs(styleQuery);
+
+      return querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          value: doc.id,
+          label: data.styleNo,
+          data: data,
+        };
+      });
+    } catch (err) {
+      console.error('Error loading styles:', err);
+      return [];
+    }
   };
 
   const handleStyleSelect = (selectedOption) => {
-    // ... (existing code)
+    if (!selectedOption) {
+      onUpdate({
+        styleNo: '',
+        productTitle: '',
+        productData: null,
+        colorName: '',
+        quantities: {},
+        totalQuantity: 0,
+        price: 0,
+        subtotal: 0,
+        isCap: false,
+      });
+      return;
+    }
+
+    const styleData = selectedOption.data;
+    const isCap = styleData.productTitle.toLowerCase().includes('cap');
+    onUpdate({
+      styleNo: styleData.styleNo,
+      productTitle: styleData.productTitle,
+      productData: styleData,
+      colorName: '',
+      quantities: {},
+      totalQuantity: 0,
+      price: 0,
+      subtotal: 0,
+      isCap: isCap,
+    });
   };
 
   const handleColorSelect = (color) => {
