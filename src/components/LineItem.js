@@ -75,6 +75,8 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
         subtotal: 0,
         isCap: false,
       }));
+      onQuantityChange(0, false);
+      onPriceChange(0, false);
       return;
     }
 
@@ -92,6 +94,8 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       subtotal: 0,
       isCap: isCap,
     }));
+    onQuantityChange(0, isCap);
+    onPriceChange(0, isCap);
   };
 
   const handleColorSelect = (color) => {
@@ -135,7 +139,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
   const calculatePrice = () => {
     if (!item.productData || item.totalQuantity === 0) {
       setItem((prevItem) => ({ ...prevItem, price: 0, subtotal: 0 }));
-      onPriceChange(0);
+      onPriceChange(0, item.isCap);
       return;
     }
 
@@ -170,7 +174,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       price: baseItemPrice,
       subtotal: subtotal
     }));
-    onPriceChange(subtotal);
+    onPriceChange(subtotal, item.isCap);
   };
 
   const renderSizingMatrix = () => {
@@ -286,7 +290,10 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
           </select>
         </div>
         <div className="w-full sm:w-1/4 pr-2 mb-2 sm:mb-0">
-          <p className="text-sm truncate">{item.productTitle || 'No product selected'}</p>
+          <p className="text-sm truncate">
+            {item.productTitle || 'No product selected'}
+            {item.isCap && <span className="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded-full">Cap</span>}
+          </p>
         </div>
         <div className="w-full sm:w-1/4 text-right">
           <button

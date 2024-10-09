@@ -6,7 +6,8 @@ export default function EmbroideryCalculator() {
   const [lineItems, setLineItems] = useState([]);
   const [totalGarmentQuantity, setTotalGarmentQuantity] = useState(0);
   const [totalCapQuantity, setTotalCapQuantity] = useState(0);
-  const [totalPrice, setTotalPrice] = useState(0);
+  const [totalGarmentPrice, setTotalGarmentPrice] = useState(0);
+  const [totalCapPrice, setTotalCapPrice] = useState(0);
 
   useEffect(() => {
     calculateTotals();
@@ -23,33 +24,36 @@ export default function EmbroideryCalculator() {
 
   const handleQuantityChange = (index, newTotalQuantity, isCap) => {
     const newLineItems = [...lineItems];
-    const oldQuantity = newLineItems[index].totalQuantity || 0;
-    const quantityDifference = newTotalQuantity - oldQuantity;
-
-    newLineItems[index] = { ...newLineItems[index], totalQuantity: newTotalQuantity };
+    newLineItems[index] = { ...newLineItems[index], totalQuantity: newTotalQuantity, isCap };
     setLineItems(newLineItems);
-
-    if (isCap) {
-      setTotalCapQuantity(prev => prev + quantityDifference);
-    } else {
-      setTotalGarmentQuantity(prev => prev + quantityDifference);
-    }
   };
 
-  const handlePriceChange = (index, price) => {
+  const handlePriceChange = (index, price, isCap) => {
     const newLineItems = [...lineItems];
-    newLineItems[index] = { ...newLineItems[index], price };
+    newLineItems[index] = { ...newLineItems[index], price, isCap };
     setLineItems(newLineItems);
   };
 
   const calculateTotals = () => {
-    let totalPrice = 0;
+    let garmentQuantity = 0;
+    let capQuantity = 0;
+    let garmentPrice = 0;
+    let capPrice = 0;
 
     lineItems.forEach(item => {
-      totalPrice += item.price || 0;
+      if (item.isCap) {
+        capQuantity += item.totalQuantity || 0;
+        capPrice += item.price || 0;
+      } else {
+        garmentQuantity += item.totalQuantity || 0;
+        garmentPrice += item.price || 0;
+      }
     });
 
-    setTotalPrice(totalPrice);
+    setTotalGarmentQuantity(garmentQuantity);
+    setTotalCapQuantity(capQuantity);
+    setTotalGarmentPrice(garmentPrice);
+    setTotalCapPrice(capPrice);
   };
 
   const isOrderValid = () => {
@@ -68,7 +72,7 @@ export default function EmbroideryCalculator() {
               key={index}
               onRemove={() => removeLineItem(index)}
               onQuantityChange={(newTotalQuantity, isCap) => handleQuantityChange(index, newTotalQuantity, isCap)}
-              onPriceChange={(price) => handlePriceChange(index, price)}
+              onPriceChange={(price, isCap) => handlePriceChange(index, price, isCap)}
               totalGarmentQuantity={totalGarmentQuantity}
               totalCapQuantity={totalCapQuantity}
             />
@@ -83,8 +87,10 @@ export default function EmbroideryCalculator() {
         <div className="p-4 bg-gray-200">
           <h2 className="text-xl font-bold">Order Summary</h2>
           <p>Total Garment Quantity: {totalGarmentQuantity}</p>
+          <p>Garment Subtotal: ${totalGarmentPrice.toFixed(2)}</p>
           <p>Total Cap Quantity: {totalCapQuantity}</p>
-          <p>Total Price: ${totalPrice.toFixed(2)}</p>
+          <p>Cap Subtotal: ${totalCapPrice.toFixed(2)}</p>
+          <p>Total Price: ${(totalGarmentPrice + totalCapPrice).toFixed(2)}</p>
           {!isOrderValid() && (
             <p className="text-red-500">
               Minimum order: 6 garments or 2 caps
