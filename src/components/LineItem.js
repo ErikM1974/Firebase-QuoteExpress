@@ -199,7 +199,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
                       min="0"
                       value={item.quantities[size] || ''}
                       onChange={(e) => handleQuantityChange(size, e.target.value)}
-                      className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                      className="w-12 text-center rounded-md border border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 hover:bg-gray-100 transition-colors duration-200"
                       aria-label={`Quantity for size ${size}`}
                     />
                     {item.quantities[size] > 0 && (
@@ -220,7 +220,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
                             min="0"
                             value={item.quantities[size] || ''}
                             onChange={(e) => handleQuantityChange(size, e.target.value)}
-                            className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                            className="w-12 text-center rounded-md border border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 hover:bg-gray-100 transition-colors duration-200"
                             aria-label={`Quantity for size ${size}`}
                           />
                           {item.quantities[size] > 0 && (
