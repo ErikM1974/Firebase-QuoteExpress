@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import LineItem from './LineItem';
 import OrderPDF from './OrderPDF';
@@ -37,8 +37,9 @@ export default function EmbroideryCalculator() {
     updateAllLineItemPrices();
   }, [totalGarmentQuantity, totalCapQuantity]);
 
-  const addLineItem = () => {
-    setLineItems([...lineItems, {
+  const addLineItem = useCallback(() => {
+    setLineItems(prevItems => [...prevItems, {
+      id: Date.now(), // Add a unique id
       styleNo: '',
       colorName: '',
       productTitle: '',
@@ -48,20 +49,19 @@ export default function EmbroideryCalculator() {
       subtotal: 0,
       isCap: false
     }]);
-  };
+  }, []);
 
-  const removeLineItem = (index) => {
-    const newLineItems = lineItems.filter((_, i) => i !== index);
-    setLineItems(newLineItems);
-  };
+  const removeLineItem = useCallback((id) => {
+    setLineItems(prevItems => prevItems.filter(item => item.id !== id));
+  }, []);
 
-  const updateLineItem = (index, updatedItem) => {
-    const newLineItems = [...lineItems];
-    newLineItems[index] = { ...newLineItems[index], ...updatedItem };
-    setLineItems(newLineItems);
-  };
+  const updateLineItem = useCallback((id, updatedItem) => {
+    setLineItems(prevItems => prevItems.map(item => 
+      item.id === id ? { ...item, ...updatedItem } : item
+    ));
+  }, []);
 
-  const calculateTotals = () => {
+  const calculateTotals = useCallback(() => {
     let garmentQuantity = 0;
     let capQuantity = 0;
     let garmentPrice = 0;
@@ -81,10 +81,10 @@ export default function EmbroideryCalculator() {
     setTotalCapQuantity(capQuantity);
     setTotalGarmentPrice(garmentPrice);
     setTotalCapPrice(capPrice);
-  };
+  }, [lineItems]);
 
-  const updateAllLineItemPrices = () => {
-    const updatedLineItems = lineItems.map(item => {
+  const updateAllLineItemPrices = useCallback(() => {
+    setLineItems(prevItems => prevItems.map(item => {
       if (!item.productData) return item;
 
       const { basePrice, capPrices, sizeUpcharges } = item.productData;
@@ -114,22 +114,20 @@ export default function EmbroideryCalculator() {
       }
 
       return { ...item, price: baseItemPrice, subtotal: subtotal };
-    });
+    }));
+  }, [totalGarmentQuantity, totalCapQuantity]);
 
-    setLineItems(updatedLineItems);
-  };
-
-  const isOrderValid = () => {
+  const isOrderValid = useCallback(() => {
     return (totalGarmentQuantity >= 6 || totalCapQuantity >= 2) && lineItems.length > 0;
-  };
+  }, [totalGarmentQuantity, totalCapQuantity, lineItems]);
 
-  const generateQuoteNumber = () => {
+  const generateQuoteNumber = useCallback(() => {
     const currentYear = new Date().getFullYear().toString().substr(-2);
     const randomNum = Math.floor(Math.random() * 99) + 1;
     return `${currentYear}${randomNum.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
-  const completeOrder = () => {
+  const completeOrder = useCallback(() => {
     const customerName = prompt("Please enter the customer's name:");
     if (customerName) {
       setCustomerName(customerName);
@@ -137,13 +135,13 @@ export default function EmbroideryCalculator() {
       setQuoteNumber(generateQuoteNumber());
       setIsOrderCompleted(true);
     }
-  };
+  }, [generateQuoteNumber]);
 
-  const unlockOrder = () => {
+  const unlockOrder = useCallback(() => {
     setIsOrderCompleted(false);
-  };
+  }, []);
 
-  const generatePDF = async () => {
+  const generatePDF = useCallback(async () => {
     const selectedSalesperson = salesperson.name === 'Other' 
       ? { name: otherSalespersonName, email: otherSalespersonEmail }
       : salesperson;
@@ -161,9 +159,9 @@ export default function EmbroideryCalculator() {
       />
     ).toBlob();
     setPdfBlob(blob);
-  };
+  }, [lineItems, totalGarmentQuantity, totalCapQuantity, totalGarmentPrice, totalCapPrice, customerName, quoteDate, quoteNumber, salesperson, otherSalespersonName, otherSalespersonEmail]);
 
-  const downloadPDF = () => {
+  const downloadPDF = useCallback(() => {
     if (pdfBlob) {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(pdfBlob);
@@ -171,16 +169,16 @@ export default function EmbroideryCalculator() {
       link.download = fileName;
       link.click();
     }
-  };
+  }, [pdfBlob, quoteNumber, customerName]);
 
-  const handleSalespersonChange = (e) => {
+  const handleSalespersonChange = useCallback((e) => {
     const selected = salespeople.find(sp => sp.name === e.target.value);
     setSalesperson(selected);
     if (selected.name !== 'Other') {
       setOtherSalespersonName('');
       setOtherSalespersonEmail('');
     }
-  };
+  }, []);
 
   return (
     <div className="bg-gray-100 min-h-screen p-4">
@@ -233,12 +231,12 @@ export default function EmbroideryCalculator() {
           )}
         </div>
         <div className="p-4">
-          {lineItems.map((item, index) => (
+          {lineItems.map((item) => (
             <LineItem
-              key={index}
+              key={item.id}
               item={item}
-              onRemove={() => removeLineItem(index)}
-              onUpdate={(updatedItem) => updateLineItem(index, updatedItem)}
+              onRemove={() => removeLineItem(item.id)}
+              onUpdate={(updatedItem) => updateLineItem(item.id, updatedItem)}
               totalGarmentQuantity={totalGarmentQuantity}
               totalCapQuantity={totalCapQuantity}
               isLocked={isOrderCompleted}
