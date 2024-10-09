@@ -127,7 +127,8 @@ export default function EmbroideryCalculator() {
     if (pdfBlob) {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(pdfBlob);
-      link.download = 'embroidery_quote.pdf';
+      const fileName = `Quote_${quoteNumber}_${customerName.replace(/\s+/g, '_')}.pdf`;
+      link.download = fileName;
       link.click();
     }
   };
