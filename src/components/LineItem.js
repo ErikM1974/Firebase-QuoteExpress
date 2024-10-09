@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import {
   collection,
@@ -14,8 +14,12 @@ import AsyncSelect from 'react-select/async';
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
 export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantity, totalCapQuantity, isLocked }) {
+  const [currentPrice, setCurrentPrice] = useState(item.price);
+
   useEffect(() => {
-    calculatePrice();
+    const { newPrice, newSubtotal } = calculatePrice();
+    setCurrentPrice(newPrice);
+    onUpdate({ ...item, price: newPrice, subtotal: newSubtotal });
   }, [item, totalGarmentQuantity, totalCapQuantity]);
 
   const loadStyleOptions = async (inputValue) => {
@@ -102,8 +106,7 @@ export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantit
 
   const calculatePrice = () => {
     if (!item.productData || item.totalQuantity === 0) {
-      onUpdate({ ...item, price: 0, subtotal: 0 });
-      return;
+      return { newPrice: 0, newSubtotal: 0 };
     }
 
     const { basePrice, capPrices, sizeUpcharges } = item.productData;
@@ -132,11 +135,7 @@ export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantit
       subtotal += itemPrice * quantity;
     }
 
-    onUpdate({ 
-      ...item,
-      price: baseItemPrice,
-      subtotal: subtotal
-    });
+    return { newPrice: baseItemPrice, newSubtotal: subtotal };
   };
 
   const renderSizingMatrix = () => {
@@ -179,7 +178,7 @@ export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantit
                     />
                     {item.quantities[size] > 0 && (
                       <div className="text-xs mt-1">
-                        ${(item.price + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
+                        ${(currentPrice + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
                       </div>
                     )}
                   </td>
@@ -201,7 +200,7 @@ export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantit
                           />
                           {item.quantities[size] > 0 && (
                             <div className="text-xs ml-1">
-                              ${(item.price + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
+                              ${(currentPrice + (item.productData.sizeUpcharges?.[size] || 0)).toFixed(2)} each
                             </div>
                           )}
                         </div>
