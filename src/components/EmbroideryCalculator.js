@@ -33,6 +33,10 @@ export default function EmbroideryCalculator() {
     calculateTotals();
   }, [lineItems]);
 
+  useEffect(() => {
+    updateAllLineItemPrices();
+  }, [totalGarmentQuantity, totalCapQuantity]);
+
   const addLineItem = () => {
     setLineItems([...lineItems, {
       styleNo: '',
@@ -77,6 +81,42 @@ export default function EmbroideryCalculator() {
     setTotalCapQuantity(capQuantity);
     setTotalGarmentPrice(garmentPrice);
     setTotalCapPrice(capPrice);
+  };
+
+  const updateAllLineItemPrices = () => {
+    const updatedLineItems = lineItems.map(item => {
+      if (!item.productData) return item;
+
+      const { basePrice, capPrices, sizeUpcharges } = item.productData;
+      const totalQuantity = item.isCap ? totalCapQuantity : totalGarmentQuantity;
+      
+      let baseItemPrice;
+      if (item.isCap) {
+        if (totalQuantity >= 144) baseItemPrice = parseFloat(capPrices['144_plus']);
+        else if (totalQuantity >= 24) baseItemPrice = parseFloat(capPrices['24_143']);
+        else baseItemPrice = parseFloat(capPrices['2_23']);
+      } else {
+        if (totalQuantity >= 72) baseItemPrice = basePrice['72_plus'];
+        else if (totalQuantity >= 48) baseItemPrice = basePrice['48_71'];
+        else if (totalQuantity >= 24) baseItemPrice = basePrice['24_47'];
+        else if (totalQuantity >= 12) baseItemPrice = basePrice['12_23'];
+        else if (totalQuantity >= 6) baseItemPrice = basePrice['6_11'];
+        else baseItemPrice = basePrice['2_5'];
+      }
+
+      let subtotal = 0;
+      for (const [size, quantity] of Object.entries(item.quantities)) {
+        let itemPrice = baseItemPrice;
+        if (sizeUpcharges && sizeUpcharges[size]) {
+          itemPrice += sizeUpcharges[size];
+        }
+        subtotal += itemPrice * quantity;
+      }
+
+      return { ...item, price: baseItemPrice, subtotal: subtotal };
+    });
+
+    setLineItems(updatedLineItems);
   };
 
   const isOrderValid = () => {
