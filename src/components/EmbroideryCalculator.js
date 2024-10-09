@@ -125,6 +125,12 @@ export default function EmbroideryCalculator() {
             Embroidery Order Form
           </h1>
         </div>
+        <div className="p-4 bg-gray-200">
+          <p>Northwest Custom Apparel</p>
+          <p>2025 Freeman Road East, Milton, WA 98354</p>
+          <p>Phone: 253-922-5793</p>
+          <p>Website: www.nwcustomapparel.com</p>
+        </div>
         <div className="p-4">
           {lineItems.map((item, index) => (
             <LineItem

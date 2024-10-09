@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: {
@@ -12,14 +12,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 20,
   },
-  logo: {
-    width: 150,
-    height: 50,
-    objectFit: 'contain',
-  },
   companyInfo: {
     flexDirection: 'column',
-    alignItems: 'flex-end',
   },
   companyName: {
     fontSize: 16,
@@ -63,7 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   sizeCell: {
-    width: '25%',
+    width: '33%',
     borderStyle: 'solid',
     borderWidth: 1,
     padding: 4,
@@ -99,10 +93,12 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
       const quantity = item.quantities[size];
       const upcharge = item.productData?.sizeUpcharges?.[size] || 0;
       const price = item.price + upcharge;
+      const subtotal = quantity * price;
       return (
         <View key={size} style={styles.sizeCell}>
           <Text>{size}: {quantity}</Text>
           <Text>${price.toFixed(2)} each</Text>
+          <Text>Subtotal: ${subtotal.toFixed(2)}</Text>
           {upcharge > 0 && <Text>(+${upcharge.toFixed(2)} upcharge)</Text>}
         </View>
       );
@@ -134,14 +130,10 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Image
-            style={styles.logo}
-            src="https://cdn.caspio.com/A0E15000/Safety%20Stripes/web%20northwest%20custom%20apparel%20logo.png?ver=1"
-          />
           <View style={styles.companyInfo}>
             <Text style={styles.companyName}>Northwest Custom Apparel</Text>
             <Text style={styles.companyDetails}>2025 Freeman Road East, Milton, WA 98354</Text>
-            <Text style={styles.companyDetails}>Phone: 253-922-5792</Text>
+            <Text style={styles.companyDetails}>Phone: 253-922-5793</Text>
             <Text style={styles.companyDetails}>Website: www.nwcustomapparel.com</Text>
           </View>
         </View>
