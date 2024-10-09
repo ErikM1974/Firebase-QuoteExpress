@@ -107,33 +107,21 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
 
   const handleQuantityChange = (size, quantity) => {
     const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty < 0) {
-      setItem((prevItem) => {
-        const newQuantities = { ...prevItem.quantities };
+    setItem((prevItem) => {
+      const newQuantities = { ...prevItem.quantities };
+      if (isNaN(qty) || qty < 0) {
         delete newQuantities[size];
-        const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
-        onQuantityChange(newTotalQuantity, prevItem.isCap);
-        return {
-          ...prevItem,
-          quantities: newQuantities,
-          totalQuantity: newTotalQuantity,
-        };
-      });
-    } else {
-      setItem((prevItem) => {
-        const newQuantities = {
-          ...prevItem.quantities,
-          [size]: qty,
-        };
-        const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
-        onQuantityChange(newTotalQuantity, prevItem.isCap);
-        return {
-          ...prevItem,
-          quantities: newQuantities,
-          totalQuantity: newTotalQuantity,
-        };
-      });
-    }
+      } else {
+        newQuantities[size] = qty;
+      }
+      const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
+      onQuantityChange(newTotalQuantity, prevItem.isCap);
+      return {
+        ...prevItem,
+        quantities: newQuantities,
+        totalQuantity: newTotalQuantity,
+      };
+    });
   };
 
   const calculatePrice = () => {
