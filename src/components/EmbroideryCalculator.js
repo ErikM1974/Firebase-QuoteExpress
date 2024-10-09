@@ -115,9 +115,16 @@ export default function EmbroideryCalculator() {
   return (
     <div className="bg-gray-100 min-h-screen p-4">
       <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-        <h1 className="text-2xl font-bold text-green-600 p-4 bg-green-100">
-          Embroidery Order Form
-        </h1>
+        <div className="p-4 bg-green-100 flex items-center justify-between">
+          <img 
+            src="https://cdn.caspio.com/A0E15000/Safety%20Stripes/web%20northwest%20custom%20apparel%20logo.png?ver=1" 
+            alt="Northwest Custom Apparel Logo" 
+            className="h-16 object-contain"
+          />
+          <h1 className="text-2xl font-bold text-green-600">
+            Embroidery Order Form
+          </h1>
+        </div>
         <div className="p-4">
           {lineItems.map((item, index) => (
             <LineItem

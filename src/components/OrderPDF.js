@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: {
@@ -7,16 +7,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 30,
   },
-  section: {
-    margin: 10,
-    padding: 10,
-    flexGrow: 1,
-  },
-  companyInfo: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
+  logo: {
+    width: 150,
+    height: 50,
+    objectFit: 'contain',
+  },
+  companyInfo: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
   companyName: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   companyDetails: {
@@ -127,11 +133,17 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.companyInfo}>
-          <Text style={styles.companyName}>Northwest Custom Apparel</Text>
-          <Text style={styles.companyDetails}>2025 Freeman Road East, Milton, WA 98354</Text>
-          <Text style={styles.companyDetails}>Phone: 253-922-5792</Text>
-          <Text style={styles.companyDetails}>Website: www.nwcustomapparel.com</Text>
+        <View style={styles.header}>
+          <Image
+            style={styles.logo}
+            src="https://cdn.caspio.com/A0E15000/Safety%20Stripes/web%20northwest%20custom%20apparel%20logo.png?ver=1"
+          />
+          <View style={styles.companyInfo}>
+            <Text style={styles.companyName}>Northwest Custom Apparel</Text>
+            <Text style={styles.companyDetails}>2025 Freeman Road East, Milton, WA 98354</Text>
+            <Text style={styles.companyDetails}>Phone: 253-922-5792</Text>
+            <Text style={styles.companyDetails}>Website: www.nwcustomapparel.com</Text>
+          </View>
         </View>
 
         <Text style={styles.title}>Invoice</Text>
