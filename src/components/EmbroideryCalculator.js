@@ -12,6 +12,8 @@ import {
 import AsyncSelect from 'react-select/async';
 import './EmbroideryCalculator.css';
 
+const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
+
 export default function EmbroideryCalculator() {
   const [order, setOrder] = useState({
     styleNo: '',
@@ -163,6 +165,78 @@ export default function EmbroideryCalculator() {
     }
   };
 
+  const renderSizingMatrix = () => {
+    if (!order.productData || !order.productData.sizes) return null;
+
+    const availableSizes = order.productData.sizes;
+    const standardSizes = STANDARD_SIZES.filter(size => availableSizes.includes(size));
+    const otherSizes = availableSizes.filter(size => !STANDARD_SIZES.includes(size));
+
+    return (
+      <div className="mt-6">
+        <h3 className="text-lg font-medium text-gray-700 mb-2">Sizing Matrix</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white">
+            <thead>
+              <tr>
+                {standardSizes.map((size) => (
+                  <th
+                    key={size}
+                    className="px-4 py-2 border-b-2 border-gray-200 bg-gray-100 text-center text-xs leading-4 font-medium text-gray-700 uppercase tracking-wider"
+                  >
+                    {size}
+                  </th>
+                ))}
+                {otherSizes.length > 0 && (
+                  <th
+                    className="px-4 py-2 border-b-2 border-gray-200 bg-gray-100 text-center text-xs leading-4 font-medium text-gray-700 uppercase tracking-wider"
+                  >
+                    Other Sizes
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {standardSizes.map((size) => (
+                  <td key={size} className="px-4 py-2 border-b border-gray-200 text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      value={order.quantities[size] || ''}
+                      onChange={(e) => handleQuantityChange(size, e.target.value)}
+                      className="mt-1 block w-16 mx-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                      aria-label={`Quantity for size ${size}`}
+                    />
+                  </td>
+                ))}
+                {otherSizes.length > 0 && (
+                  <td className="px-4 py-2 border-b border-gray-200 text-center">
+                    <div className="flex flex-col items-center">
+                      {otherSizes.map((size) => (
+                        <div key={size} className="flex items-center mb-2">
+                          <span className="mr-2">{size}:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={order.quantities[size] || ''}
+                            onChange={(e) => handleQuantityChange(size, e.target.value)}
+                            className="block w-16 rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                            aria-label={`Quantity for size ${size}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-gray-100 min-h-screen p-4">
       <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
@@ -230,43 +304,7 @@ export default function EmbroideryCalculator() {
           </div>
 
           {/* Sizing Matrix */}
-          {order.productData && order.productData.sizes && (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Sizing Matrix</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white">
-                  <thead>
-                    <tr>
-                      {order.productData.sizes.map((size) => (
-                        <th
-                          key={size}
-                          className="px-4 py-2 border-b-2 border-gray-200 bg-gray-100 text-center text-xs leading-4 font-medium text-gray-700 uppercase tracking-wider"
-                        >
-                          {size}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {order.productData.sizes.map((size) => (
-                        <td key={size} className="px-4 py-2 border-b border-gray-200 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            value={order.quantities[size] || ''}
-                            onChange={(e) => handleQuantityChange(size, e.target.value)}
-                            className="mt-1 block w-16 mx-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                            aria-label={`Quantity for size ${size}`}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {renderSizingMatrix()}
 
           {/* Submit Button */}
           <div className="mt-4">
