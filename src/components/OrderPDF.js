@@ -52,16 +52,24 @@ const styles = StyleSheet.create({
   },
   sizingMatrix: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: 5,
     marginBottom: 5,
   },
   sizeCell: {
-    width: '12.5%',
+    width: '25%',
     borderStyle: 'solid',
     borderWidth: 1,
-    padding: 2,
+    padding: 4,
     fontSize: 8,
-    textAlign: 'center',
+    textAlign: 'left',
+    marginBottom: 2,
+  },
+  sizeHeader: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginTop: 5,
+    marginBottom: 2,
   },
   summary: {
     marginTop: 20,
@@ -70,12 +78,51 @@ const styles = StyleSheet.create({
   },
 });
 
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
+const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 
 const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPrice, customerName, orderDate, orderNumber }) => {
   const subtotal = totalPrice || 0;
   const salesTax = subtotal * 0.101; // 10.1% sales tax
   const total = subtotal + salesTax;
+
+  const renderSizingMatrix = (item) => {
+    const standardSizes = STANDARD_SIZES.filter(size => item.quantities[size] > 0);
+    const otherSizes = Object.keys(item.quantities).filter(size => !STANDARD_SIZES.includes(size) && item.quantities[size] > 0);
+
+    const renderSizeCell = (size) => {
+      const quantity = item.quantities[size];
+      const upcharge = item.productData?.sizeUpcharges?.[size] || 0;
+      const price = item.price + upcharge;
+      return (
+        <View key={size} style={styles.sizeCell}>
+          <Text>{size}: {quantity}</Text>
+          <Text>${price.toFixed(2)} each</Text>
+          {upcharge > 0 && <Text>(+${upcharge.toFixed(2)} upcharge)</Text>}
+        </View>
+      );
+    };
+
+    return (
+      <View>
+        {standardSizes.length > 0 && (
+          <View>
+            <Text style={styles.sizeHeader}>Standard Sizes:</Text>
+            <View style={styles.sizingMatrix}>
+              {standardSizes.map(renderSizeCell)}
+            </View>
+          </View>
+        )}
+        {otherSizes.length > 0 && (
+          <View>
+            <Text style={styles.sizeHeader}>Other Sizes:</Text>
+            <View style={styles.sizingMatrix}>
+              {otherSizes.map(renderSizeCell)}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <Document>
@@ -100,17 +147,8 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
             <Text style={styles.lineItemHeader}>{item.productTitle}</Text>
             <Text style={styles.lineItemDetails}>Style: {item.styleNo}</Text>
             <Text style={styles.lineItemDetails}>Color: {item.colorName}</Text>
-            <Text style={styles.lineItemDetails}>Price per item: ${item.price.toFixed(2)}</Text>
             
-            <View style={styles.sizingMatrix}>
-              {SIZES.map((size) => (
-                <View key={size} style={styles.sizeCell}>
-                  <Text>{size}</Text>
-                  <Text>{item.quantities[size] || 0}</Text>
-                  <Text>${((item.productData?.sizeUpcharges?.[size] || 0) + item.price).toFixed(2)}</Text>
-                </View>
-              ))}
-            </View>
+            {renderSizingMatrix(item)}
             
             <Text style={styles.lineItemDetails}>Total Quantity: {item.totalQuantity}</Text>
             <Text style={styles.lineItemDetails}>Subtotal: ${item.subtotal.toFixed(2)}</Text>
