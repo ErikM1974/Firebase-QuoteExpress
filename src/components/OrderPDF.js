@@ -95,32 +95,27 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
           <Text style={styles.orderInfoItem}>Order Number: {orderNumber}</Text>
         </View>
         
-        {lineItems.map((item, index) => {
-          const itemSubtotal = Object.values(item.quantities || {}).reduce((sum, qty) => sum + qty * item.price, 0);
-          return (
-            <View key={index} style={styles.lineItem}>
-              <Text style={styles.lineItemHeader}>{item.productTitle || 'Product'}</Text>
-              <Text style={styles.lineItemDetails}>Style: {item.styleNo || ''}</Text>
-              <Text style={styles.lineItemDetails}>Color: {item.colorName || ''}</Text>
-              
-              <View style={styles.sizingMatrix}>
-                {SIZES.map((size) => {
-                  const quantity = (item.quantities && item.quantities[size]) || 0;
-                  return (
-                    <View key={size} style={styles.sizeCell}>
-                      <Text>{size}</Text>
-                      <Text>{quantity}</Text>
-                      <Text>${(item.price || 0).toFixed(2)}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-              
-              <Text style={styles.lineItemDetails}>Total Quantity: {item.totalQuantity || 0}</Text>
-              <Text style={styles.lineItemDetails}>Subtotal: ${itemSubtotal.toFixed(2)}</Text>
+        {lineItems.map((item, index) => (
+          <View key={index} style={styles.lineItem}>
+            <Text style={styles.lineItemHeader}>{item.productTitle}</Text>
+            <Text style={styles.lineItemDetails}>Style: {item.styleNo}</Text>
+            <Text style={styles.lineItemDetails}>Color: {item.colorName}</Text>
+            <Text style={styles.lineItemDetails}>Price per item: ${item.price.toFixed(2)}</Text>
+            
+            <View style={styles.sizingMatrix}>
+              {SIZES.map((size) => (
+                <View key={size} style={styles.sizeCell}>
+                  <Text>{size}</Text>
+                  <Text>{item.quantities[size] || 0}</Text>
+                  <Text>${((item.productData?.sizeUpcharges?.[size] || 0) + item.price).toFixed(2)}</Text>
+                </View>
+              ))}
             </View>
-          );
-        })}
+            
+            <Text style={styles.lineItemDetails}>Total Quantity: {item.totalQuantity}</Text>
+            <Text style={styles.lineItemDetails}>Subtotal: ${item.subtotal.toFixed(2)}</Text>
+          </View>
+        ))}
 
         <View style={styles.summary}>
           <Text>Total Garment Quantity: {totalGarmentQuantity}</Text>

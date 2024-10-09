@@ -21,7 +21,16 @@ export default function EmbroideryCalculator() {
   }, [lineItems]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, {}]);
+    setLineItems([...lineItems, {
+      styleNo: '',
+      colorName: '',
+      productTitle: '',
+      quantities: {},
+      totalQuantity: 0,
+      price: 0,
+      subtotal: 0,
+      isCap: false
+    }]);
   };
 
   const removeLineItem = (index) => {
@@ -29,34 +38,10 @@ export default function EmbroideryCalculator() {
     setLineItems(newLineItems);
   };
 
-  const handleQuantityChange = (index, newTotalQuantity, isCap) => {
+  const updateLineItem = (index, updatedItem) => {
     const newLineItems = [...lineItems];
-    const oldQuantity = newLineItems[index].totalQuantity || 0;
-    const quantityDifference = newTotalQuantity - oldQuantity;
-
-    newLineItems[index] = { ...newLineItems[index], totalQuantity: newTotalQuantity, isCap };
+    newLineItems[index] = { ...newLineItems[index], ...updatedItem };
     setLineItems(newLineItems);
-
-    if (isCap) {
-      setTotalCapQuantity(prev => prev + quantityDifference);
-    } else {
-      setTotalGarmentQuantity(prev => prev + quantityDifference);
-    }
-  };
-
-  const handlePriceChange = (index, price, isCap) => {
-    const newLineItems = [...lineItems];
-    const oldPrice = newLineItems[index].price || 0;
-    const priceDifference = price - oldPrice;
-
-    newLineItems[index] = { ...newLineItems[index], price, isCap };
-    setLineItems(newLineItems);
-
-    if (isCap) {
-      setTotalCapPrice(prev => prev + priceDifference);
-    } else {
-      setTotalGarmentPrice(prev => prev + priceDifference);
-    }
   };
 
   const calculateTotals = () => {
@@ -68,10 +53,10 @@ export default function EmbroideryCalculator() {
     lineItems.forEach(item => {
       if (item.isCap) {
         capQuantity += item.totalQuantity || 0;
-        capPrice += item.price || 0;
+        capPrice += item.subtotal || 0;
       } else {
         garmentQuantity += item.totalQuantity || 0;
-        garmentPrice += item.price || 0;
+        garmentPrice += item.subtotal || 0;
       }
     });
 
@@ -139,8 +124,7 @@ export default function EmbroideryCalculator() {
               key={index}
               item={item}
               onRemove={() => removeLineItem(index)}
-              onQuantityChange={(newTotalQuantity, isCap) => handleQuantityChange(index, newTotalQuantity, isCap)}
-              onPriceChange={(price, isCap) => handlePriceChange(index, price, isCap)}
+              onUpdate={(updatedItem) => updateLineItem(index, updatedItem)}
               totalGarmentQuantity={totalGarmentQuantity}
               totalCapQuantity={totalCapQuantity}
               isLocked={isOrderCompleted}

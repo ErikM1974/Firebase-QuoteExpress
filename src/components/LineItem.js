@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { db } from '../firebase';
 import {
   collection,
@@ -13,19 +13,7 @@ import AsyncSelect from 'react-select/async';
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 
-export default function LineItem({ onRemove, onQuantityChange, onPriceChange, totalGarmentQuantity, totalCapQuantity }) {
-  const [item, setItem] = useState({
-    styleNo: '',
-    colorName: '',
-    productTitle: '',
-    productData: null,
-    quantities: {},
-    totalQuantity: 0,
-    price: 0,
-    subtotal: 0,
-    isCap: false,
-  });
-
+export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantity, totalCapQuantity, isLocked }) {
   useEffect(() => {
     calculatePrice();
   }, [item.quantities, item.productData, totalGarmentQuantity, totalCapQuantity]);
@@ -63,8 +51,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
 
   const handleStyleSelect = (selectedOption) => {
     if (!selectedOption) {
-      setItem((prevItem) => ({
-        ...prevItem,
+      onUpdate({
         styleNo: '',
         productTitle: '',
         productData: null,
@@ -74,16 +61,13 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
         price: 0,
         subtotal: 0,
         isCap: false,
-      }));
-      onQuantityChange(0, false);
-      onPriceChange(0, false);
+      });
       return;
     }
 
     const styleData = selectedOption.data;
     const isCap = styleData.productTitle.toLowerCase().includes('cap');
-    setItem((prevItem) => ({
-      ...prevItem,
+    onUpdate({
       styleNo: styleData.styleNo,
       productTitle: styleData.productTitle,
       productData: styleData,
@@ -93,41 +77,32 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       price: 0,
       subtotal: 0,
       isCap: isCap,
-    }));
-    onQuantityChange(0, isCap);
-    onPriceChange(0, isCap);
+    });
   };
 
   const handleColorSelect = (color) => {
-    setItem((prevItem) => ({
-      ...prevItem,
-      colorName: color,
-    }));
+    onUpdate({ ...item, colorName: color });
   };
 
   const handleQuantityChange = (size, quantity) => {
     const qty = parseInt(quantity, 10);
-    setItem((prevItem) => {
-      const newQuantities = { ...prevItem.quantities };
-      if (isNaN(qty) || qty < 0) {
-        delete newQuantities[size];
-      } else {
-        newQuantities[size] = qty;
-      }
-      const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
-      onQuantityChange(newTotalQuantity, prevItem.isCap);
-      return {
-        ...prevItem,
-        quantities: newQuantities,
-        totalQuantity: newTotalQuantity,
-      };
+    const newQuantities = { ...item.quantities };
+    if (isNaN(qty) || qty < 0) {
+      delete newQuantities[size];
+    } else {
+      newQuantities[size] = qty;
+    }
+    const newTotalQuantity = Object.values(newQuantities).reduce((a, b) => a + b, 0);
+    onUpdate({
+      ...item,
+      quantities: newQuantities,
+      totalQuantity: newTotalQuantity,
     });
   };
 
   const calculatePrice = () => {
     if (!item.productData || item.totalQuantity === 0) {
-      setItem((prevItem) => ({ ...prevItem, price: 0, subtotal: 0 }));
-      onPriceChange(0, item.isCap);
+      onUpdate({ ...item, price: 0, subtotal: 0 });
       return;
     }
 
@@ -157,12 +132,11 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
       subtotal += itemPrice * quantity;
     }
 
-    setItem((prevItem) => ({ 
-      ...prevItem, 
+    onUpdate({ 
+      ...item,
       price: baseItemPrice,
       subtotal: subtotal
-    }));
-    onPriceChange(subtotal, item.isCap);
+    });
   };
 
   const renderSizingMatrix = () => {
@@ -201,6 +175,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
                       onChange={(e) => handleQuantityChange(size, e.target.value)}
                       className="w-12 text-center rounded-md border border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 hover:bg-gray-100 transition-colors duration-200"
                       aria-label={`Quantity for size ${size}`}
+                      disabled={isLocked}
                     />
                     {item.quantities[size] > 0 && (
                       <div className="text-xs mt-1">
@@ -222,6 +197,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
                             onChange={(e) => handleQuantityChange(size, e.target.value)}
                             className="w-12 text-center rounded-md border border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 hover:bg-gray-100 transition-colors duration-200"
                             aria-label={`Quantity for size ${size}`}
+                            disabled={isLocked}
                           />
                           {item.quantities[size] > 0 && (
                             <div className="text-xs ml-1">
@@ -258,6 +234,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
             loadingMessage={() => 'Loading...'}
             cacheOptions
             defaultOptions
+            isDisabled={isLocked}
           />
         </div>
         <div className="w-full sm:w-1/4 pr-2 mb-2 sm:mb-0">
@@ -265,7 +242,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
             className="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
             onChange={(e) => handleColorSelect(e.target.value)}
             value={item.colorName}
-            disabled={!item.productData || !item.productData.colors}
+            disabled={!item.productData || !item.productData.colors || isLocked}
           >
             <option value="">Select Color</option>
             {item.productData &&
@@ -287,6 +264,7 @@ export default function LineItem({ onRemove, onQuantityChange, onPriceChange, to
           <button
             onClick={onRemove}
             className="bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600"
+            disabled={isLocked}
           >
             Remove
           </button>
