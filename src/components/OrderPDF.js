@@ -29,10 +29,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
-  orderInfo: {
+  quoteInfo: {
     marginBottom: 20,
   },
-  orderInfoItem: {
+  quoteInfoItem: {
     fontSize: 12,
     marginBottom: 5,
   },
@@ -80,10 +80,19 @@ const styles = StyleSheet.create({
 
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 
-const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPrice, customerName, orderDate, orderNumber }) => {
+const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPrice, customerName, quoteDate, quoteNumber }) => {
   const subtotal = totalPrice || 0;
   const salesTax = subtotal * 0.101; // 10.1% sales tax
   const total = subtotal + salesTax;
+
+  // Calculate expiration date (30 days from quote date)
+  const quoteDateObj = new Date(quoteDate);
+  const expirationDate = new Date(quoteDateObj);
+  expirationDate.setDate(expirationDate.getDate() + 30);
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
 
   const renderSizingMatrix = (item) => {
     const standardSizes = STANDARD_SIZES.filter(size => item.quantities[size] > 0);
@@ -138,12 +147,14 @@ const OrderPDF = ({ lineItems, totalGarmentQuantity, totalCapQuantity, totalPric
           </View>
         </View>
 
-        <Text style={styles.title}>Invoice</Text>
+        <Text style={styles.title}>Quote</Text>
 
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderInfoItem}>Customer Name: {customerName}</Text>
-          <Text style={styles.orderInfoItem}>Order Date: {orderDate}</Text>
-          <Text style={styles.orderInfoItem}>Order Number: {orderNumber}</Text>
+        <View style={styles.quoteInfo}>
+          <Text style={styles.quoteInfoItem}>Customer Name: {customerName}</Text>
+          <Text style={styles.quoteInfoItem}>Quote Date: {formatDate(quoteDateObj)}</Text>
+          <Text style={styles.quoteInfoItem}>Quote Number: {quoteNumber}</Text>
+          <Text style={styles.quoteInfoItem}>Quote is Good for 30 Days</Text>
+          <Text style={styles.quoteInfoItem}>Expiration Date: {formatDate(expirationDate)}</Text>
         </View>
         
         {lineItems.map((item, index) => (

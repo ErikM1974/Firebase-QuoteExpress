@@ -13,8 +13,8 @@ export default function EmbroideryCalculator() {
   const [pdfBlob, setPdfBlob] = useState(null);
   const [isOrderCompleted, setIsOrderCompleted] = useState(false);
   const [customerName, setCustomerName] = useState('');
-  const [orderDate, setOrderDate] = useState('');
-  const [orderNumber, setOrderNumber] = useState('');
+  const [quoteDate, setQuoteDate] = useState('');
+  const [quoteNumber, setQuoteNumber] = useState('');
 
   useEffect(() => {
     calculateTotals();
@@ -70,22 +70,24 @@ export default function EmbroideryCalculator() {
     return (totalGarmentQuantity >= 6 || totalCapQuantity >= 2) && lineItems.length > 0;
   };
 
+  const generateQuoteNumber = () => {
+    const currentYear = new Date().getFullYear().toString().substr(-2);
+    const randomNum = Math.floor(Math.random() * 99) + 1;
+    return `${currentYear}${randomNum.toString().padStart(2, '0')}`;
+  };
+
   const completeOrder = () => {
     const customerName = prompt("Please enter the customer's name:");
     if (customerName) {
       setCustomerName(customerName);
-      setOrderDate(new Date().toISOString().split('T')[0]);
-      setOrderNumber(generateOrderNumber());
+      setQuoteDate(new Date().toISOString().split('T')[0]);
+      setQuoteNumber(generateQuoteNumber());
       setIsOrderCompleted(true);
     }
   };
 
   const unlockOrder = () => {
     setIsOrderCompleted(false);
-  };
-
-  const generateOrderNumber = () => {
-    return 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase();
   };
 
   const generatePDF = async () => {
@@ -96,8 +98,8 @@ export default function EmbroideryCalculator() {
         totalCapQuantity={totalCapQuantity}
         totalPrice={totalGarmentPrice + totalCapPrice}
         customerName={customerName}
-        orderDate={orderDate}
-        orderNumber={orderNumber}
+        quoteDate={quoteDate}
+        quoteNumber={quoteNumber}
       />
     ).toBlob();
     setPdfBlob(blob);
@@ -107,7 +109,7 @@ export default function EmbroideryCalculator() {
     if (pdfBlob) {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(pdfBlob);
-      link.download = 'embroidery_order.pdf';
+      link.download = 'embroidery_quote.pdf';
       link.click();
     }
   };
@@ -122,7 +124,7 @@ export default function EmbroideryCalculator() {
             className="h-16 object-contain"
           />
           <h1 className="text-2xl font-bold text-green-600">
-            Embroidery Order Form
+            Embroidery Quote Form
           </h1>
         </div>
         <div className="p-4 bg-gray-200">
@@ -152,7 +154,7 @@ export default function EmbroideryCalculator() {
           </button>
         </div>
         <div className="p-4 bg-gray-200">
-          <h2 className="text-xl font-bold">Order Summary</h2>
+          <h2 className="text-xl font-bold">Quote Summary</h2>
           <p>Total Garment Quantity: {totalGarmentQuantity}</p>
           <p>Garment Subtotal: ${totalGarmentPrice.toFixed(2)}</p>
           <p>Total Cap Quantity: {totalCapQuantity}</p>
@@ -171,14 +173,14 @@ export default function EmbroideryCalculator() {
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mr-4"
               disabled={!isOrderValid()}
             >
-              Complete Order
+              Complete Quote
             </button>
           ) : (
             <button
               onClick={unlockOrder}
               className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 mr-4"
             >
-              Unlock Order
+              Unlock Quote
             </button>
           )}
           <button
@@ -198,10 +200,10 @@ export default function EmbroideryCalculator() {
         </div>
         {isOrderCompleted && (
           <div className="p-4 bg-blue-100">
-            <h3 className="font-bold">Order Details:</h3>
+            <h3 className="font-bold">Quote Details:</h3>
             <p>Customer Name: {customerName}</p>
-            <p>Order Date: {orderDate}</p>
-            <p>Order Number: {orderNumber}</p>
+            <p>Quote Date: {quoteDate}</p>
+            <p>Quote Number: {quoteNumber}</p>
           </div>
         )}
       </div>
