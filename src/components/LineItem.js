@@ -16,68 +16,14 @@ const STANDARD_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
 export default function LineItem({ item, onRemove, onUpdate, totalGarmentQuantity, totalCapQuantity, isLocked }) {
   useEffect(() => {
     calculatePrice();
-  }, [item.quantities, item.productData, totalGarmentQuantity, totalCapQuantity]);
+  }, [item, totalGarmentQuantity, totalCapQuantity]);
 
   const loadStyleOptions = async (inputValue) => {
-    try {
-      if (!inputValue) return [];
-
-      const searchTerm = inputValue.toUpperCase();
-      const stylesRef = collection(db, 'styles');
-
-      const styleQuery = query(
-        stylesRef,
-        orderBy('styleNo'),
-        startAt(searchTerm),
-        endAt(searchTerm + '\uf8ff'),
-        limit(20)
-      );
-
-      const querySnapshot = await getDocs(styleQuery);
-
-      return querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          value: doc.id,
-          label: data.styleNo,
-          data: data,
-        };
-      });
-    } catch (err) {
-      console.error('Error loading styles:', err);
-      return [];
-    }
+    // ... (existing code)
   };
 
   const handleStyleSelect = (selectedOption) => {
-    if (!selectedOption) {
-      onUpdate({
-        styleNo: '',
-        productTitle: '',
-        productData: null,
-        colorName: '',
-        quantities: {},
-        totalQuantity: 0,
-        price: 0,
-        subtotal: 0,
-        isCap: false,
-      });
-      return;
-    }
-
-    const styleData = selectedOption.data;
-    const isCap = styleData.productTitle.toLowerCase().includes('cap');
-    onUpdate({
-      styleNo: styleData.styleNo,
-      productTitle: styleData.productTitle,
-      productData: styleData,
-      colorName: '',
-      quantities: {},
-      totalQuantity: 0,
-      price: 0,
-      subtotal: 0,
-      isCap: isCap,
-    });
+    // ... (existing code)
   };
 
   const handleColorSelect = (color) => {
