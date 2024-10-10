@@ -1,0 +1,12 @@
+specVersion: "v1beta"
+serviceId: "embroidered-order-form"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "embroidered-order-form-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]

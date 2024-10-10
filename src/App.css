@@ -1,0 +1,5 @@
+/* Any custom styles that can't be easily replaced with Tailwind classes */
+.embroidery-calculator select,
+.embroidery-calculator input {
+  font-size: 16px;
+}
