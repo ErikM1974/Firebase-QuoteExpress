@@ -5,6 +5,8 @@ import { db } from './firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
 function App() {
+  const environment = process.env.NODE_ENV;
+
   const testFirebaseConnection = async () => {
     try {
       const docRef = await addDoc(collection(db, "test"), {
@@ -24,6 +26,9 @@ function App() {
       <header className="bg-green-600 text-white p-4">
         <h1 className="text-2xl font-bold">Embroidery Order Form</h1>
       </header>
+      <div style={{position: 'fixed', top: 0, right: 0, background: 'yellow', padding: '5px', zIndex: 1000}}>
+        Environment: {environment}
+      </div>
       <main className="container mx-auto px-4 py-8">
         <EmbroideryCalculator />
         <button 
