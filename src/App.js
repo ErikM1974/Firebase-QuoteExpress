@@ -5,7 +5,7 @@ import { db } from './firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
 function App() {
-  const environment = process.env.NODE_ENV;
+  const environment = process.env.REACT_APP_ENVIRONMENT;
 
   const testFirebaseConnection = async () => {
     try {

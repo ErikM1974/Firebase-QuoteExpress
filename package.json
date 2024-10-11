@@ -30,8 +30,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "deploy": "npm run build && firebase deploy",
-    "deploy:dev": "npm run build && firebase use development && firebase deploy",
-    "deploy:prod": "npm run build && firebase use production && firebase deploy"
+    "deploy:dev": "set NODE_ENV=development && env-cmd -f .env.development npm run build && firebase use quoteexpress-dev-new && firebase deploy",
+    "deploy:prod": "set NODE_ENV=production && npm run build && firebase use EmbroideryCalculator && firebase deploy"
   },
   "eslintConfig": {
     "extends": [
@@ -54,6 +54,7 @@
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "autoprefixer": "^10.4.20",
+    "env-cmd": "^10.1.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13"
   }

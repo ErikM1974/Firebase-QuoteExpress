@@ -28,75 +28,85 @@ Firebase-QuoteExpress is an embroidery pricing calculator web application built 
 1. Clone the repository
 2. Install dependencies: `npm install`
 3. Set up environment variables:
-   - Copy `.env.example` to `.env`
-   - Fill in the required environment variables
+   - Copy `.env.example` to `.env.development` and `.env.production`
+   - Fill in the required environment variables for both files
 4. Set up Firebase:
-   - Create a Firebase project
-   - Add your Firebase configuration to `src/firebase.js`
-   - Set up Firestore database and adjust security rules in `firestore.rules`
-5. Run the application:
-   - For development: `npm start`
-   - For production build: `npm run build`
+   - Create two Firebase projects: one for development and one for production
+   - Add your Firebase configurations to `.env.development` and `.env.production`
+   - Set up Firestore database and adjust security rules in `firestore.rules` for both projects
 
 ## Environment Setup
 
-The project now supports separate development and production environments. Follow these steps to set up and switch between environments:
+The project supports separate development and production environments. Here's how to set up and use each environment:
 
-1. Development Environment:
-   a. Create a new Firebase project for development:
-      - Go to the Firebase Console (https://console.firebase.google.com/)
-      - Click on "Add project" and follow the prompts to create a new project
-      - Name the project "QuoteExpress-Dev"
-      - Enable Google Analytics if desired (recommended)
-      - Click "Create project"
+### Development Environment (QuoteExpress-Dev-New)
 
-   b. Set up Firebase in your new development project:
-      - In the Firebase Console, click on your newly created "QuoteExpress-Dev" project
-      - Click on the web icon (</>) to add a web app to your project
-      - Register your app with the nickname "quoteexpress-dev-web"
-      - Copy the Firebase configuration object provided
+1. Firebase Console Setup:
+   - Go to the Firebase Console (https://console.firebase.google.com/)
+   - Create a new project named "QuoteExpress-Dev-New"
+   - Enable necessary services (Firestore, Hosting, etc.)
 
-   c. Update `.env.development` with your development Firebase configuration:
-      - Copy `.env` to `.env.development` if you haven't already
-      - Update `.env.development` with the configuration you just copied:
-        ```
-        REACT_APP_DEV_FIREBASE_API_KEY=YOUR_DEV_API_KEY
-        REACT_APP_DEV_FIREBASE_AUTH_DOMAIN=quoteexpress-dev.firebaseapp.com
-        REACT_APP_DEV_FIREBASE_PROJECT_ID=quoteexpress-dev
-        REACT_APP_DEV_FIREBASE_STORAGE_BUCKET=quoteexpress-dev.appspot.com
-        REACT_APP_DEV_FIREBASE_MESSAGING_SENDER_ID=YOUR_DEV_SENDER_ID
-        REACT_APP_DEV_FIREBASE_APP_ID=YOUR_DEV_APP_ID
-        REACT_APP_DEV_FIREBASE_MEASUREMENT_ID=YOUR_DEV_MEASUREMENT_ID
-        ```
+2. Local Setup:
+   - Update `.env.development` with the Firebase configuration for QuoteExpress-Dev-New
+   - Ensure `REACT_APP_ENVIRONMENT=development` is set in `.env.development`
 
-   d. Set up Firestore in your development project:
-      - In the Firebase Console, go to "Firestore Database"
-      - Click "Create database"
-      - Start in production mode (or test mode if you prefer)
-      - Choose a location for your database
-      - Set up your security rules as needed (you can copy from your production project if applicable)
+3. Running Locally:
+   - Use `npm start` to run the development server
 
-2. Production Environment:
-   - Ensure your `.env` file contains the production Firebase configuration
+4. Deployment:
+   - Use `npm run deploy:dev` to deploy to the development environment
 
-3. Switching Between Environments:
-   - For development: `NODE_ENV=development npm start`
-   - For production: `NODE_ENV=production npm start`
+5. Accessing the Deployed App:
+   - Visit https://quoteexpress-dev-new.web.app
 
-4. Building for Production:
-   - Run `npm run build` to create a production build
+### Production Environment (EmbroideryCalculator)
 
-The `src/firebase.js` file has been updated to use the appropriate configuration based on the `NODE_ENV` environment variable.
+1. Firebase Console Setup:
+   - Use your existing "EmbroideryCalculator" Firebase project
 
-## Deployment
+2. Local Setup:
+   - Update `.env.production` with the Firebase configuration for EmbroideryCalculator
+   - Ensure `REACT_APP_ENVIRONMENT=production` is set in `.env.production`
 
-The project is set up for deployment to Firebase. Use the following command to deploy:
+3. Building for Production:
+   - Use `npm run build` to create a production build
+
+4. Deployment:
+   - Use `npm run deploy:prod` to deploy to the production environment
+
+5. Accessing the Deployed App:
+   - Visit your production URL (e.g., https://embroidery-calculator.web.app)
+
+## Development Workflow
+
+1. Make changes in your local development environment
+2. Test changes locally using `npm start`
+3. Deploy to the development environment using `npm run deploy:dev`
+4. Test thoroughly on the deployed development site
+5. When ready for production, deploy using `npm run deploy:prod`
+
+## Available Scripts
+
+- `npm start`: Runs the app in development mode
+- `npm test`: Launches the test runner
+- `npm run build`: Builds the app for production
+- `npm run deploy:dev`: Deploys to the development environment
+- `npm run deploy:prod`: Deploys to the production environment
+
+## Environment Variables
+
+Ensure these variables are set in your `.env.development` and `.env.production` files:
 
 ```
-npm run deploy
+REACT_APP_FIREBASE_API_KEY=
+REACT_APP_FIREBASE_AUTH_DOMAIN=
+REACT_APP_FIREBASE_PROJECT_ID=
+REACT_APP_FIREBASE_STORAGE_BUCKET=
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=
+REACT_APP_FIREBASE_APP_ID=
+REACT_APP_FIREBASE_MEASUREMENT_ID=
+REACT_APP_ENVIRONMENT=
 ```
-
-Note: Make sure you're using the correct Firebase project when deploying. You may need to use `firebase use [PROJECT_ID]` to switch between your development (QuoteExpress-Dev) and production projects.
 
 ## Contributing
 
